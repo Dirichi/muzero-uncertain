@@ -107,7 +107,7 @@ def make_cartpole_config() -> MuZeroConfig:
                       'max_value': 200},
         network=CartPoleNetwork,
         action_space_size=2,
-        max_moves=1000,
+        max_moves=200,
         discount=0.99,
         dirichlet_alpha=0.25,
         num_simulations=11,  # Odd number perform better in eval mode
