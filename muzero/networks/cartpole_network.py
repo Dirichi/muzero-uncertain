@@ -15,11 +15,11 @@ class MinMaxScaleLayer(tf.keras.layers.Layer):
         self.scale = tf.Variable(1.)
 
     def call(self, inputs):
-        min = tf.reduce_min(inputs, axis=1, keepdims=True)
-        max = tf.reduce_max(inputs, axis=1, keepdims=True)
-        scale = max - min
-        scale[scale < 1e-5] += 1e-5
-        normalized = (inputs - min) / scale
+        min_input = tf.reduce_min(inputs, axis=1, keepdims=True)
+        max_input = tf.reduce_max(inputs, axis=1, keepdims=True)
+        scale = max_input - min_input
+        scale = tf.where(scale > 1e-5, scale, scale + 1e-5)
+        normalized = (inputs - min_input) / scale
         return normalized
 
 
