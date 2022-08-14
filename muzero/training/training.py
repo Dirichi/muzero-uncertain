@@ -33,7 +33,7 @@ def update_weights(optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
         representation_batch, value_batch, policy_batch = network.initial_model(np.array(image_batch))
 
         # Only update the element with a policy target
-        target_value_batch, _, target_policy_batch = zip(*targets_init_batch)
+        target_value_batch, _, target_policy_batch, _ = zip(*targets_init_batch)
         mask_policy = list(map(lambda l: bool(l), target_policy_batch))
         target_policy_batch = list(filter(lambda l: bool(l), target_policy_batch))
         policy_batch = tf.boolean_mask(policy_batch, mask_policy)
@@ -46,12 +46,17 @@ def update_weights(optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
         # Recurrent steps, from action and previous hidden state.
         for actions_batch, targets_batch, mask, dynamic_mask in zip(actions_time_batch, targets_time_batch,
                                                                     mask_time_batch, dynamic_mask_time_batch):
-            target_value_batch, target_reward_batch, target_policy_batch = zip(*targets_batch)
+            target_value_batch, target_reward_batch, target_policy_batch, target_next_state_batch = zip(*targets_batch)
+            # Compute hidden state representation of next state. This will be
+            # used to compute consistency loss.
+            target_representation_batch = network.representation_network(np.array(target_next_state_batch))
+            target_representation_batch = tf.stop_gradient(target_representation_batch)
 
             # Only execute BPTT for elements with an action
             representation_batch = tf.boolean_mask(representation_batch, dynamic_mask)
             target_value_batch = tf.boolean_mask(target_value_batch, mask)
             target_reward_batch = tf.boolean_mask(target_reward_batch, mask)
+            target_representation_batch = tf.boolean_mask(target_representation_batch, mask)
             # Creating conditioned_representation: concatenate representations with actions batch
             actions_batch = tf.one_hot(actions_batch, network.action_size)
 
