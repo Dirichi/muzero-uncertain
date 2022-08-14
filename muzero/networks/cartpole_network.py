@@ -1,11 +1,26 @@
 import math
 
 import numpy as np
+import tensorflow as tf
 from tensorflow.keras import regularizers, Sequential
 from tensorflow.keras.layers import Dense
 
 from game.game import Action
 from networks.network import BaseNetwork
+
+
+class MinMaxScaleLayer(tf.keras.layers.Layer):
+    def __init__(self):
+        super(MinMaxScaleLayer, self).__init__()
+        self.scale = tf.Variable(1.)
+
+    def call(self, inputs):
+        min_input = tf.reduce_min(inputs, axis=1, keepdims=True)
+        max_input = tf.reduce_max(inputs, axis=1, keepdims=True)
+        scale = max_input - min_input
+        scale = tf.where(scale > 1e-5, scale, scale + 1e-5)
+        normalized = (inputs - min_input) / scale
+        return normalized
 
 
 class CartPoleNetwork(BaseNetwork):
@@ -25,18 +40,21 @@ class CartPoleNetwork(BaseNetwork):
         regularizer = regularizers.l2(weight_decay)
         representation_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                              Dense(representation_size, activation=representation_activation,
-                                                   kernel_regularizer=regularizer)])
+                                                   kernel_regularizer=regularizer),
+                                            MinMaxScaleLayer()])
         value_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                     Dense(self.value_support_size, kernel_regularizer=regularizer)])
         policy_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                      Dense(action_size, kernel_regularizer=regularizer)])
         dynamic_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                       Dense(representation_size, activation=representation_activation,
-                                            kernel_regularizer=regularizer)])
+                                            kernel_regularizer=regularizer),
+                                      MinMaxScaleLayer()])
         reward_network = Sequential([Dense(16, activation='relu', kernel_regularizer=regularizer),
                                      Dense(1, kernel_regularizer=regularizer)])
 
-        super().__init__(representation_network, value_network, policy_network, dynamic_network, reward_network)
+        super().__init__(representation_network, value_network,
+                         policy_network, dynamic_network, reward_network)
 
     def _value_transform(self, value_support: np.array) -> float:
         """
@@ -53,7 +71,8 @@ class CartPoleNetwork(BaseNetwork):
         return np.asscalar(reward)
 
     def _conditioned_hidden_state(self, hidden_state: np.array, action: Action) -> np.array:
-        conditioned_hidden = np.concatenate((hidden_state, np.eye(self.action_size)[action.index]))
+        conditioned_hidden = np.concatenate(
+            (hidden_state, np.eye(self.action_size)[action.index]))
         return np.expand_dims(conditioned_hidden, axis=0)
 
     def _softmax(self, values):
