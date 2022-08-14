@@ -70,12 +70,16 @@ def update_weights(optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
             mask_policy = list(map(lambda l: bool(l), target_policy_batch))
             target_policy_batch = tf.convert_to_tensor([policy for policy in target_policy_batch if policy])
             policy_batch = tf.boolean_mask(policy_batch, mask_policy)
+            consistency_loss = tf.math.reduce_mean(tf.math.squared_difference(representation_batch, target_representation_batch))
+            HARD_CODED_CONSISTENCY_LOSS_WEIGHT = 0.5
+            weighted_consistency_loss = HARD_CODED_CONSISTENCY_LOSS_WEIGHT * consistency_loss
 
             # Compute the partial loss
             l = (tf.math.reduce_mean(loss_value(target_value_batch, value_batch, network.value_support_size)) +
                  MSE(target_reward_batch, tf.squeeze(reward_batch)) +
                  tf.math.reduce_mean(
-                     tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch)))
+                     tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch)) +
+                weighted_consistency_loss)
 
             # Scale the gradient of the loss by the average number of actions unrolled
             gradient_scale = 1. / len(actions_time_batch)
