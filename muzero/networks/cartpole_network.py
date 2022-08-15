@@ -12,7 +12,6 @@ from networks.network import BaseNetwork
 class MinMaxScaleLayer(tf.keras.layers.Layer):
     def __init__(self):
         super(MinMaxScaleLayer, self).__init__()
-        self.scale = tf.Variable(1.)
 
     def call(self, inputs):
         min_input = tf.reduce_min(inputs, axis=1, keepdims=True)
