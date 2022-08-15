@@ -39,16 +39,14 @@ class CartPoleNetwork(BaseNetwork):
         regularizer = regularizers.l2(weight_decay)
         representation_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                              Dense(representation_size, activation=representation_activation,
-                                                   kernel_regularizer=regularizer),
-                                            MinMaxScaleLayer()])
+                                                   kernel_regularizer=regularizer)])
         value_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                     Dense(self.value_support_size, kernel_regularizer=regularizer)])
         policy_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                      Dense(action_size, kernel_regularizer=regularizer)])
         dynamic_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                       Dense(representation_size, activation=representation_activation,
-                                            kernel_regularizer=regularizer),
-                                      MinMaxScaleLayer()])
+                                            kernel_regularizer=regularizer)])
         reward_network = Sequential([Dense(16, activation='relu', kernel_regularizer=regularizer),
                                      Dense(1, kernel_regularizer=regularizer)])
 
