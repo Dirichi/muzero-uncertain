@@ -25,6 +25,8 @@ def muzero(config: MuZeroConfig):
 
         print("Train score:", score_train)
         print("Eval score:", run_eval(config, storage, 20))
+        if storage.current_network:
+            print("Current network training steps: {0}".format(storage.current_network.training_steps))
         print(f"MuZero played {config.nb_episodes * (loop + 1)} "
               f"episodes and trained for {config.nb_epochs * (loop + 1)} epochs.\n")
 

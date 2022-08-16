@@ -95,6 +95,8 @@ class AbstractGame(ABC):
         targets = []
         for current_index in range(state_index, state_index + num_unroll_steps + 1):
             bootstrap_index = current_index + td_steps
+            next_index = min(current_index + 1, len(self.observations) - 1)
+            next_state = self.make_image(next_index)
             if bootstrap_index < len(self.root_values):
                 value = self.root_values[bootstrap_index] * self.discount ** td_steps
             else:
@@ -104,10 +106,10 @@ class AbstractGame(ABC):
                 value += reward * self.discount ** i
 
             if current_index < len(self.root_values):
-                targets.append((value, self.rewards[current_index], self.child_visits[current_index]))
+                targets.append((value, self.rewards[current_index], self.child_visits[current_index], next_state))
             else:
                 # States past the end of games are treated as absorbing states.
-                targets.append((0, 0, []))
+                targets.append((0, 0, [], next_state))
         return targets
 
     def to_play(self) -> Player:
