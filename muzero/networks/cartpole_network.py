@@ -61,11 +61,11 @@ class CartPoleNetwork(BaseNetwork):
 
         value = self._softmax(value_support)
         value = np.dot(value, range(self.value_support_size))
-        value = np.asscalar(value) ** 2
+        value = np.ndarray.item(value) ** 2
         return value
 
     def _reward_transform(self, reward: np.array) -> float:
-        return np.asscalar(reward)
+        return np.ndarray.item(reward)
 
     def _conditioned_hidden_state(self, hidden_state: np.array, action: Action) -> np.array:
         conditioned_hidden = np.concatenate(
