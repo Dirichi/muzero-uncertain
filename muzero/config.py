@@ -77,6 +77,7 @@ class MuZeroConfig(object):
         self.network = network
         self.lr = lr
         self.consistency_loss_weight = consistency_loss_weight
+        self.ensemble_training_enabled = False
         # Exponential learning rate schedule
         # self.lr_init = lr_init
         # self.lr_decay_rate = 0.1
@@ -128,6 +129,7 @@ def make_cartpole_config_with_consistency_loss_and_ensemble_dynamics() -> MuZero
     config = make_cartpole_config_with_consistency_loss()
     config.network = EnsembleCartPoleNetwork
     config.network_args['num_dynamics_models'] = 5
+    config.ensemble_training_enabled = True
     return config
 
 

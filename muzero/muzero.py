@@ -40,8 +40,7 @@ def muzero(config: MuZeroConfig):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    if args.config == "DEFAULT":
-        config = make_cartpole_config()
+    config = make_cartpole_config()
 
     if args.config == "CONSISTENCY_LOSS":
         config = make_cartpole_config_with_consistency_loss()

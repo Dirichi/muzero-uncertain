@@ -13,6 +13,7 @@ class NetworkOutput(typing.NamedTuple):
     reward: float
     policy_logits: Dict[Action, float]
     hidden_state: typing.Optional[List[float]]
+    uncertainty: List[float] = []
 
     @staticmethod
     def build_policy_logits(policy_logits):
@@ -80,6 +81,20 @@ class RecurrentModel(Model):
         policy_logits = self.policy_network(hidden_representation)
         return hidden_representation, reward, value, policy_logits
 
+class UncertaintyAwareRecurrentModel(RecurrentModel):
+    """Inherits from RecurrentModel, but assumes that the dynamic network
+    outputs uncertainty."""
+
+    def __init__(self, dynamic_network: Model, reward_network: Model, value_network: Model, policy_network: Model):
+        super(UncertaintyAwareRecurrentModel, self).__init__(dynamic_network, reward_network, value_network, policy_network)
+
+    def call(self, conditioned_hidden):
+        hidden_representation, uncertainty = self.dynamic_network(conditioned_hidden)
+        reward = self.reward_network(conditioned_hidden)
+        value = self.value_network(hidden_representation)
+        policy_logits = self.policy_network(hidden_representation)
+        return hidden_representation, reward, value, policy_logits, uncertainty
+
 
 class BaseNetwork(AbstractNetwork):
     """Base class that contains all the networks and models of MuZero."""
@@ -143,3 +158,28 @@ class BaseNetwork(AbstractNetwork):
                     for variables in variables_list]
 
         return get_variables
+
+class UncertaintyAwareBaseNetwork(BaseNetwork):
+    """Inherits from BaseNetwork, but assumes that the recurrent_inferrence
+    outiputs uncertainty aware."""
+    def __init__(self, representation_network: Model, value_network: Model, policy_network: Model,
+                 dynamic_network: Model, reward_network: Model):
+        super().__init__(representation_network, value_network, policy_network, dynamic_network, reward_network)
+        self.recurrent_model = UncertaintyAwareRecurrentModel(
+            self.dynamic_network,
+            self.reward_network,
+            self.value_network,
+            self.policy_network
+        )
+
+    def recurrent_inference(self, hidden_state: np.array, action: Action) -> NetworkOutput:
+        """dynamics + prediction function"""
+
+        conditioned_hidden = self._conditioned_hidden_state(hidden_state, action)
+        hidden_representation, reward, value, policy_logits, uncertainty = self.recurrent_model.predict(conditioned_hidden)
+        output = NetworkOutput(value=self._value_transform(value),
+                               reward=self._reward_transform(reward),
+                               policy_logits=NetworkOutput.build_policy_logits(policy_logits),
+                               hidden_state=hidden_representation[0],
+                               uncertainty=uncertainty[0])
+        return output

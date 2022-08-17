@@ -9,6 +9,20 @@ from tensorflow.keras.models import Model
 from game.game import Action
 from networks.network import BaseNetwork
 
+class EnsembleModel(Model):
+  def __init__(self, models) -> None:
+      super(EnsembleModel, self).__init__()
+      self.models = models
+
+  def call(self, input):
+    outputs = []
+    for model in self.models:
+      output = model(input)
+      outputs.append(output)
+
+    prediction = tf.reduce_mean(outputs, axis=0)
+    uncertainty = tf.math.reduce_std(outputs, axis=0)
+    return prediction, uncertainty
 
 class EnsembleCartPoleNetwork(BaseNetwork):
 
@@ -69,27 +83,9 @@ class EnsembleCartPoleNetwork(BaseNetwork):
 
     def _build_dynamics_model(self, hidden_neurons, regularizer, representation_size, representation_activation):
         networks = []
-        for i in range(self.num_dynamics_models):
+        for _ in range(self.num_dynamics_models):
           network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                       Dense(representation_size, activation=representation_activation,
                                             kernel_regularizer=regularizer)])
           networks.append(network)
         return EnsembleModel(networks)
-
-
-
-
-class EnsembleModel(Model):
-  def __init__(self, models) -> None:
-      super(EnsembleModel, self).__init__()
-      self.models = models
-
-  def call(self, input):
-    outputs = []
-    for model in self.models:
-      output = model(input)
-      outputs.append(output)
-
-    prediction = tf.reduce_mean(outputs, axis=0)
-    uncertainty = tf.reduce_mean(tf.math.reduce_std(outputs, axis=0))
-    return prediction, uncertainty
