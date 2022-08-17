@@ -1,13 +1,13 @@
 import argparse
 
-from config import MuZeroConfig, make_cartpole_config, make_cartpole_config_with_consistency_loss
+from config import MuZeroConfig, default_cartpole_config, consistency_cartpole_config, ensemble_dynamics_cartpole_config
 from networks.shared_storage import SharedStorage
 from self_play.self_play import run_selfplay, run_eval
 from training.replay_buffer import ReplayBuffer
 from training.training import train_network
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', help='''The Muzero configuration to run.''')
+parser.add_argument('--config', help='''The Muzero configuration to run.''', default="DEFAULT")
 
 
 def muzero(config: MuZeroConfig):
@@ -40,9 +40,13 @@ def muzero(config: MuZeroConfig):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    config = make_cartpole_config()
-
-    if args.config == "CONSISTENCY_LOSS":
-        config = make_cartpole_config_with_consistency_loss()
-
-    muzero(config)
+    config_mapping = {
+        "DEFAULT": default_cartpole_config(),
+        "CONSISTENCY": consistency_cartpole_config(),
+        "ENSEMBLE_CONSISTENCY":ensemble_dynamics_cartpole_config()
+    }
+    config = config_mapping.get(args.config, None)
+    if config:
+        muzero(config)
+    else:
+        print("Invalid config provided")

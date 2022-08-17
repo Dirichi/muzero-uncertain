@@ -96,7 +96,7 @@ class MuZeroConfig(object):
         return tf.keras.optimizers.SGD(learning_rate=self.lr, momentum=self.momentum)
 
 
-def make_cartpole_config() -> MuZeroConfig:
+def default_cartpole_config() -> MuZeroConfig:
     def visit_softmax_temperature(num_moves, training_steps):
         return 1.0
 
@@ -120,13 +120,13 @@ def make_cartpole_config() -> MuZeroConfig:
         visit_softmax_temperature_fn=visit_softmax_temperature,
         lr=0.05)
 
-def make_cartpole_config_with_consistency_loss() -> MuZeroConfig:
-    config = make_cartpole_config()
+def consistency_cartpole_config() -> MuZeroConfig:
+    config = default_cartpole_config()
     config.consistency_loss_weight = 0.5
     return config
 
-def make_cartpole_config_with_consistency_loss_and_ensemble_dynamics() -> MuZeroConfig:
-    config = make_cartpole_config_with_consistency_loss()
+def ensemble_dynamics_cartpole_config() -> MuZeroConfig:
+    config = consistency_cartpole_config()
     config.network = EnsembleCartPoleNetwork
     config.network_args['num_dynamics_models'] = 5
     config.ensemble_training_enabled = True
