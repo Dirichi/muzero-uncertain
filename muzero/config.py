@@ -5,6 +5,7 @@ import tensorflow as tf
 
 from game.cartpole import CartPole
 from game.game import AbstractGame
+from networks.ensemble_cartpole_network import EnsembleCartPoleNetwork
 from networks.cartpole_network import CartPoleNetwork
 from networks.network import BaseNetwork, UniformNetwork
 
@@ -30,7 +31,7 @@ class MuZeroConfig(object):
                  visit_softmax_temperature_fn,
                  lr: float,
                  known_bounds: Optional[KnownBounds] = None,
-                 consistency_loss_weight: int = 0):
+                 consistency_loss_weight: float = 0.0):
         ### Environment
         self.game = game
 
@@ -121,6 +122,12 @@ def make_cartpole_config() -> MuZeroConfig:
 def make_cartpole_config_with_consistency_loss() -> MuZeroConfig:
     config = make_cartpole_config()
     config.consistency_loss_weight = 0.5
+    return config
+
+def make_cartpole_config_with_consistency_loss_and_ensemble_dynamics() -> MuZeroConfig:
+    config = make_cartpole_config_with_consistency_loss()
+    config.network = EnsembleCartPoleNetwork
+    config.network_args['num_dynamics_models'] = 5
     return config
 
 
