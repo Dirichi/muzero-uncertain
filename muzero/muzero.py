@@ -1,8 +1,13 @@
-from config import MuZeroConfig, make_cartpole_config
+import argparse
+
+from config import MuZeroConfig, make_cartpole_config, make_cartpole_config_with_consistency_loss
 from networks.shared_storage import SharedStorage
 from self_play.self_play import run_selfplay, run_eval
 from training.replay_buffer import ReplayBuffer
 from training.training import train_network
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--config', help='''The Muzero configuration to run.''')
 
 
 def muzero(config: MuZeroConfig):
@@ -34,5 +39,11 @@ def muzero(config: MuZeroConfig):
 
 
 if __name__ == '__main__':
-    config = make_cartpole_config()
+    args = parser.parse_args()
+    if args.config == "DEFAULT":
+        config = make_cartpole_config()
+
+    if args.config == "CONSISTENCY_LOSS":
+        config = make_cartpole_config_with_consistency_loss()
+
     muzero(config)

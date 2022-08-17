@@ -29,7 +29,8 @@ class MuZeroConfig(object):
                  td_steps: int,
                  visit_softmax_temperature_fn,
                  lr: float,
-                 known_bounds: Optional[KnownBounds] = None):
+                 known_bounds: Optional[KnownBounds] = None,
+                 consistency_loss_weight: int = 0):
         ### Environment
         self.game = game
 
@@ -74,6 +75,7 @@ class MuZeroConfig(object):
         self.network_args = network_args
         self.network = network
         self.lr = lr
+        self.consistency_loss_weight = consistency_loss_weight
         # Exponential learning rate schedule
         # self.lr_init = lr_init
         # self.lr_decay_rate = 0.1
@@ -115,6 +117,11 @@ def make_cartpole_config() -> MuZeroConfig:
         td_steps=10,
         visit_softmax_temperature_fn=visit_softmax_temperature,
         lr=0.05)
+
+def make_cartpole_config_with_consistency_loss() -> MuZeroConfig:
+    config = make_cartpole_config()
+    config.consistency_loss_weight = 0.5
+    return config
 
 
 """
