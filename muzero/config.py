@@ -47,7 +47,7 @@ class MuZeroConfig(object):
         # Root prior exploration noise.
         self.root_dirichlet_alpha = dirichlet_alpha
         self.root_exploration_fraction = 0.25
-        self.root_uncertainty_exploration_fraction = 0.0
+        self.uncertainty_exploration_prob = 0.0
 
         # UCB formula
         self.pb_c_base = 19652
@@ -129,12 +129,17 @@ def ensemble_dynamics_cartpole_config() -> MuZeroConfig:
     config = consistency_cartpole_config()
     config.network = EnsembleCartPoleNetwork
     config.network_args['num_dynamics_models'] = 5
-    config.network_args['selection_probability'] = 0.9
+    config.network_args['selection_size'] = 4
     return config
 
-def ensemble_dynamics_uncertainty_exploration_cartpole_config() -> MuZeroConfig:
+def partial_uncertainty_exploration_cartpole_config() -> MuZeroConfig:
     config = ensemble_dynamics_cartpole_config()
-    config.root_uncertainty_exploration_fraction = 0.2
+    config.uncertainty_exploration_prob = 0.25
+    return config
+
+def full_uncertainty_exploration_cartpole_config() -> MuZeroConfig:
+    config = partial_uncertainty_exploration_cartpole_config()
+    config.uncertainty_exploration_prob = 1.0
     return config
 
 """
