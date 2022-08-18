@@ -16,17 +16,18 @@ def train_network(config: MuZeroConfig, storage: SharedStorage, replay_buffer: R
 
     for _ in range(epochs):
         batch = replay_buffer.sample_batch(config.num_unroll_steps, config.td_steps)
-        update_weights(optimizer, network, batch)
+        update_weights(config, optimizer, network, batch)
         storage.save_network(network.training_steps, network)
 
 
-def update_weights(optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
+def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
     def scale_gradient(tensor, scale: float):
         """Trick function to scale the gradient in tensorflow"""
         return (1. - scale) * tf.stop_gradient(tensor) + scale * tensor
 
     def loss():
         loss = 0
+        all_reccurrent_model_vars_initialized = False
         image_batch, targets_init_batch, targets_time_batch, actions_time_batch, mask_time_batch, dynamic_mask_time_batch = batch
 
         # Initial step, from the real observation: representation + prediction networks
@@ -62,8 +63,14 @@ def update_weights(optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
 
             # Recurrent step from conditioned representation: recurrent + prediction networks
             conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
-            representation_batch, reward_batch, value_batch, policy_batch = network.recurrent_model(
-                conditioned_representation_batch)
+            # HACK: Avoid variable uninitialized errors for the ensemble model
+            # by calling it on input to initialize all vars.
+            if not all_reccurrent_model_vars_initialized:
+                network.recurrent_model(conditioned_representation_batch, train=False)
+                all_reccurrent_model_vars_initialized = True
+
+            representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
+                    conditioned_representation_batch, train=True)
 
             # Only execute BPTT for elements with a policy target
             target_policy_batch = [policy for policy, b in zip(target_policy_batch, mask) if b]
@@ -71,8 +78,7 @@ def update_weights(optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
             target_policy_batch = tf.convert_to_tensor([policy for policy in target_policy_batch if policy])
             policy_batch = tf.boolean_mask(policy_batch, mask_policy)
             consistency_loss = tf.math.reduce_mean(tf.math.squared_difference(representation_batch, target_representation_batch))
-            HARD_CODED_CONSISTENCY_LOSS_WEIGHT = 0.5
-            weighted_consistency_loss = HARD_CODED_CONSISTENCY_LOSS_WEIGHT * consistency_loss
+            weighted_consistency_loss = config.consistency_loss_weight * consistency_loss
 
             # Compute the partial loss
             l = (tf.math.reduce_mean(loss_value(target_value_batch, value_batch, network.value_support_size)) +

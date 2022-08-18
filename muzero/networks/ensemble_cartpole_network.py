@@ -2,39 +2,48 @@ import math
 
 import numpy as np
 import tensorflow as tf
+import random
 from tensorflow.keras import regularizers, Sequential
 from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Model
 
 from game.game import Action
-from networks.network import BaseNetwork
+from networks.network import UncertaintyAwareBaseNetwork
 
+class EnsembleModel(Model):
+  def __init__(self, models, selection_probability) -> None:
+      super(EnsembleModel, self).__init__()
+      self.models = models
+      self.selection_probability = selection_probability
 
-class MinMaxScaleLayer(tf.keras.layers.Layer):
-    def __init__(self):
-        super(MinMaxScaleLayer, self).__init__()
+  def call(self, input, train=False):
+    outputs = []
+    selection_prob = self.selection_probability if train else 1
+    for model in self.models:
+      if random.random() < selection_prob:
+        outputs.append(model(input))
 
-    def call(self, inputs):
-        min_input = tf.reduce_min(inputs, axis=1, keepdims=True)
-        max_input = tf.reduce_max(inputs, axis=1, keepdims=True)
-        scale = max_input - min_input
-        scale = tf.where(scale > 1e-5, scale, scale + 1e-5)
-        normalized = (inputs - min_input) / scale
-        return normalized
+    prediction = tf.reduce_mean(outputs, axis=0)
+    uncertainty = tf.math.reduce_std(outputs, axis=0)
+    return prediction, uncertainty
 
-
-class CartPoleNetwork(BaseNetwork):
+class EnsembleCartPoleNetwork(UncertaintyAwareBaseNetwork):
 
     def __init__(self,
                  state_size: int,
                  action_size: int,
                  representation_size: int,
                  max_value: int,
+                 num_dynamics_models: int,
+                 selection_probability: float,
                  hidden_neurons: int = 64,
                  weight_decay: float = 1e-4,
                  representation_activation: str = 'tanh'):
         self.state_size = state_size
         self.action_size = action_size
         self.value_support_size = math.ceil(math.sqrt(max_value)) + 1
+        self.num_dynamics_models = num_dynamics_models
+        self.selection_probability = selection_probability
 
         regularizer = regularizers.l2(weight_decay)
         representation_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
@@ -44,14 +53,15 @@ class CartPoleNetwork(BaseNetwork):
                                     Dense(self.value_support_size, kernel_regularizer=regularizer)])
         policy_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                      Dense(action_size, kernel_regularizer=regularizer)])
-        dynamic_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
-                                      Dense(representation_size, activation=representation_activation,
-                                            kernel_regularizer=regularizer)])
+        dynamic_network = self._build_dynamics_model(
+          hidden_neurons=hidden_neurons,
+          regularizer=regularizer,
+          representation_activation=representation_activation,
+          representation_size=representation_size)
         reward_network = Sequential([Dense(16, activation='relu', kernel_regularizer=regularizer),
                                      Dense(1, kernel_regularizer=regularizer)])
 
-        super().__init__(representation_network, value_network,
-                         policy_network, dynamic_network, reward_network)
+        super().__init__(representation_network, value_network, policy_network, dynamic_network, reward_network)
 
     def _value_transform(self, value_support: np.array) -> float:
         """
@@ -68,11 +78,19 @@ class CartPoleNetwork(BaseNetwork):
         return np.ndarray.item(reward)
 
     def _conditioned_hidden_state(self, hidden_state: np.array, action: Action) -> np.array:
-        conditioned_hidden = np.concatenate(
-            (hidden_state, np.eye(self.action_size)[action.index]))
+        conditioned_hidden = np.concatenate((hidden_state, np.eye(self.action_size)[action.index]))
         return np.expand_dims(conditioned_hidden, axis=0)
 
     def _softmax(self, values):
         """Compute softmax using numerical stability tricks."""
         values_exp = np.exp(values - np.max(values))
         return values_exp / np.sum(values_exp)
+
+    def _build_dynamics_model(self, hidden_neurons, regularizer, representation_size, representation_activation):
+        networks = []
+        for _ in range(self.num_dynamics_models):
+          network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
+                                      Dense(representation_size, activation=representation_activation,
+                                            kernel_regularizer=regularizer)])
+          networks.append(network)
+        return EnsembleModel(networks, self.selection_probability)

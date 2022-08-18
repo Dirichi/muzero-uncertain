@@ -5,6 +5,7 @@ import tensorflow as tf
 
 from game.cartpole import CartPole
 from game.game import AbstractGame
+from networks.ensemble_cartpole_network import EnsembleCartPoleNetwork
 from networks.cartpole_network import CartPoleNetwork
 from networks.network import BaseNetwork, UniformNetwork
 
@@ -29,7 +30,8 @@ class MuZeroConfig(object):
                  td_steps: int,
                  visit_softmax_temperature_fn,
                  lr: float,
-                 known_bounds: Optional[KnownBounds] = None):
+                 known_bounds: Optional[KnownBounds] = None,
+                 consistency_loss_weight: float = 0.0):
         ### Environment
         self.game = game
 
@@ -74,6 +76,8 @@ class MuZeroConfig(object):
         self.network_args = network_args
         self.network = network
         self.lr = lr
+        self.consistency_loss_weight = consistency_loss_weight
+        self.ensemble_training_enabled = False
         # Exponential learning rate schedule
         # self.lr_init = lr_init
         # self.lr_decay_rate = 0.1
@@ -92,7 +96,7 @@ class MuZeroConfig(object):
         return tf.keras.optimizers.SGD(learning_rate=self.lr, momentum=self.momentum)
 
 
-def make_cartpole_config() -> MuZeroConfig:
+def default_cartpole_config() -> MuZeroConfig:
     def visit_softmax_temperature(num_moves, training_steps):
         return 1.0
 
@@ -115,6 +119,19 @@ def make_cartpole_config() -> MuZeroConfig:
         td_steps=10,
         visit_softmax_temperature_fn=visit_softmax_temperature,
         lr=0.05)
+
+def consistency_cartpole_config() -> MuZeroConfig:
+    config = default_cartpole_config()
+    config.consistency_loss_weight = 0.5
+    return config
+
+def ensemble_dynamics_cartpole_config() -> MuZeroConfig:
+    config = consistency_cartpole_config()
+    config.network = EnsembleCartPoleNetwork
+    config.network_args['num_dynamics_models'] = 5
+    config.network_args['selection_probability'] = 0.9
+    config.ensemble_training_enabled = True
+    return config
 
 
 """

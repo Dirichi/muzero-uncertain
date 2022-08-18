@@ -1,8 +1,14 @@
-from config import MuZeroConfig, make_cartpole_config
+import argparse
+import tensorflow as tf
+
+from config import MuZeroConfig, default_cartpole_config, consistency_cartpole_config, ensemble_dynamics_cartpole_config
 from networks.shared_storage import SharedStorage
 from self_play.self_play import run_selfplay, run_eval
 from training.replay_buffer import ReplayBuffer
 from training.training import train_network
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--config', help='''The Muzero configuration to run.''', default="DEFAULT")
 
 
 def muzero(config: MuZeroConfig):
@@ -15,6 +21,8 @@ def muzero(config: MuZeroConfig):
     In contrast to the original MuZero algorithm this version doesn't works with
     multiple threads, therefore the training and self-play is done alternately.
     """
+    # Disable logging for interactive training
+    tf.keras.utils.disable_interactive_logging()
     storage = SharedStorage(config.new_network(), config.uniform_network(), config.new_optimizer())
     replay_buffer = ReplayBuffer(config)
 
@@ -34,5 +42,14 @@ def muzero(config: MuZeroConfig):
 
 
 if __name__ == '__main__':
-    config = make_cartpole_config()
-    muzero(config)
+    args = parser.parse_args()
+    config_mapping = {
+        "DEFAULT": default_cartpole_config(),
+        "CONSISTENCY": consistency_cartpole_config(),
+        "ENSEMBLE_CONSISTENCY": ensemble_dynamics_cartpole_config()
+    }
+    config = config_mapping.get(args.config, None)
+    if config:
+        muzero(config)
+    else:
+        print("Invalid config provided")
