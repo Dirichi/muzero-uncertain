@@ -24,25 +24,6 @@ def add_exploration_noise(config: MuZeroConfig, node: Node):
     for a, n in zip(actions, noise):
         node.children[a].prior = node.children[a].prior * (1 - frac) + n * frac
 
-def add_uncertainty_exploration_noise(config: MuZeroConfig, node: Node,  network: BaseNetwork):
-    """
-    At the start of each search, we uncertainty noise to the prior of the root
-    to encourage the search to explore actions for which we are uncertain.
-    """
-    actions = list(node.children.keys())
-    uncertainties = [get_dynamics_model_uncertainty(node, action, network) for action in actions]
-    uncertainty_sum = sum(uncertainties)
-    frac = config.root_uncertainty_exploration_fraction
-    for action, uncertainty in zip(actions, uncertainties):
-        prior = node.children[action].prior
-        node.children[action].prior = (prior * (1 - frac)) + ((uncertainty / uncertainty_sum) * frac)
-
-
-def get_dynamics_model_uncertainty(node: Node, action: Action, network: BaseNetwork) -> float:
-    network_output = network.recurrent_inference(node.hidden_state, action)
-    return tf.math.reduce_mean(network_output.uncertainty)
-
-
 def run_mcts(config: MuZeroConfig, root: Node, action_history: ActionHistory, network: BaseNetwork):
     """
     Core Monte Carlo Tree Search algorithm.

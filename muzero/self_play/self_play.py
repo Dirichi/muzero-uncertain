@@ -4,7 +4,7 @@ from config import MuZeroConfig
 from game.game import AbstractGame
 from networks.network import AbstractNetwork
 from networks.shared_storage import SharedStorage
-from self_play.mcts import run_mcts, select_action, expand_node, add_exploration_noise, add_uncertainty_exploration_noise
+from self_play.mcts import run_mcts, select_action, expand_node, add_exploration_noise
 from self_play.utils import Node
 from training.replay_buffer import ReplayBuffer
 
