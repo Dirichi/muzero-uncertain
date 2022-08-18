@@ -129,6 +129,7 @@ def ensemble_dynamics_cartpole_config() -> MuZeroConfig:
     config = consistency_cartpole_config()
     config.network = EnsembleCartPoleNetwork
     config.network_args['num_dynamics_models'] = 5
+    config.network_args['num_dynamics_training_population'] = 3
     config.ensemble_training_enabled = True
     return config
 

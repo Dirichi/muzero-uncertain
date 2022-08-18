@@ -2,6 +2,7 @@ import math
 
 import numpy as np
 import tensorflow as tf
+import random
 from tensorflow.keras import regularizers, Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.models import Model
@@ -10,15 +11,16 @@ from game.game import Action
 from networks.network import BaseNetwork
 
 class EnsembleModel(Model):
-  def __init__(self, models) -> None:
+  def __init__(self, models, training_population) -> None:
       super(EnsembleModel, self).__init__()
       self.models = models
+      self.training_population = training_population # Hard coding this for now
 
-  def call(self, input):
+  def call(self, input, train=False):
     outputs = []
-    for model in self.models:
-      output = model(input)
-      outputs.append(output)
+    selected_models = random.sample(self.models, self.training_population) if train else self.models
+    for model in selected_models:
+      outputs.append(model(input))
 
     prediction = tf.reduce_mean(outputs, axis=0)
     uncertainty = tf.math.reduce_std(outputs, axis=0)
@@ -32,6 +34,7 @@ class EnsembleCartPoleNetwork(BaseNetwork):
                  representation_size: int,
                  max_value: int,
                  num_dynamics_models: int,
+                 num_dynamics_training_population: int,
                  hidden_neurons: int = 64,
                  weight_decay: float = 1e-4,
                  representation_activation: str = 'tanh'):
@@ -39,6 +42,7 @@ class EnsembleCartPoleNetwork(BaseNetwork):
         self.action_size = action_size
         self.value_support_size = math.ceil(math.sqrt(max_value)) + 1
         self.num_dynamics_models = num_dynamics_models
+        self.num_dynamics_training_population = num_dynamics_training_population
 
         regularizer = regularizers.l2(weight_decay)
         representation_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
@@ -88,4 +92,4 @@ class EnsembleCartPoleNetwork(BaseNetwork):
                                       Dense(representation_size, activation=representation_activation,
                                             kernel_regularizer=regularizer)])
           networks.append(network)
-        return EnsembleModel(networks)
+        return EnsembleModel(networks, self.num_dynamics_training_population)
