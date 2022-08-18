@@ -79,7 +79,8 @@ class RecurrentModel(Model):
         reward = self.reward_network(conditioned_hidden)
         value = self.value_network(hidden_representation)
         policy_logits = self.policy_network(hidden_representation)
-        return hidden_representation, reward, value, policy_logits
+        # None represents no uncertainty
+        return hidden_representation, reward, value, policy_logits, None
 
 class UncertaintyAwareRecurrentModel(RecurrentModel):
     """Inherits from RecurrentModel, but assumes that the dynamic network

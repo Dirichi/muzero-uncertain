@@ -27,6 +27,7 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
 
     def loss():
         loss = 0
+        all_reccurrent_model_vars_initialized = False
         image_batch, targets_init_batch, targets_time_batch, actions_time_batch, mask_time_batch, dynamic_mask_time_batch = batch
 
         # Initial step, from the real observation: representation + prediction networks
@@ -62,7 +63,13 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
 
             # Recurrent step from conditioned representation: recurrent + prediction networks
             conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
-            representation_batch, reward_batch, value_batch, policy_batch, *uncertainty_batch = network.recurrent_model(
+            # HACK: Avoid variable uninitialized errors for the ensemble model
+            # by calling it on input to initialize all vars.
+            if not all_reccurrent_model_vars_initialized:
+                network.recurrent_model(conditioned_representation_batch, train=False)
+                all_reccurrent_model_vars_initialized = True
+
+            representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
                     conditioned_representation_batch, train=True)
 
             # Only execute BPTT for elements with a policy target

@@ -43,7 +43,7 @@ if __name__ == '__main__':
     config_mapping = {
         "DEFAULT": default_cartpole_config(),
         "CONSISTENCY": consistency_cartpole_config(),
-        "ENSEMBLE_CONSISTENCY":ensemble_dynamics_cartpole_config()
+        "ENSEMBLE_CONSISTENCY": ensemble_dynamics_cartpole_config()
     }
     config = config_mapping.get(args.config, None)
     if config:
