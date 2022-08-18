@@ -4,7 +4,7 @@ from config import MuZeroConfig
 from game.game import AbstractGame
 from networks.network import AbstractNetwork
 from networks.shared_storage import SharedStorage
-from self_play.mcts import run_mcts, select_action, expand_node, add_exploration_noise
+from self_play.mcts import run_mcts, select_action, expand_node, add_exploration_noise, add_uncertainty_exploration_noise
 from self_play.utils import Node
 from training.replay_buffer import ReplayBuffer
 
@@ -47,6 +47,8 @@ def play_game(config: MuZeroConfig, network: AbstractNetwork, train: bool = True
         expand_node(root, game.to_play(), game.legal_actions(), network.initial_inference(current_observation))
         if train:
             add_exploration_noise(config, root)
+        if train and config.root_uncertainty_exploration_fraction > 0:
+            add_uncertainty_exploration_noise(config, root, network)
 
         # We then run a Monte Carlo Tree Search using only action sequences and the
         # model learned by the networks.

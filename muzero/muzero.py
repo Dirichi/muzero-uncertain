@@ -52,4 +52,4 @@ if __name__ == '__main__':
     if config:
         muzero(config)
     else:
-        print("Invalid config provided")
+        print("Invalid muzero config provided: {0}".format(args.config))

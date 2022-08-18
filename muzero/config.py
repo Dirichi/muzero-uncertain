@@ -47,6 +47,7 @@ class MuZeroConfig(object):
         # Root prior exploration noise.
         self.root_dirichlet_alpha = dirichlet_alpha
         self.root_exploration_fraction = 0.25
+        self.root_uncertainty_exploration_fraction = 0.0
 
         # UCB formula
         self.pb_c_base = 19652
@@ -77,7 +78,6 @@ class MuZeroConfig(object):
         self.network = network
         self.lr = lr
         self.consistency_loss_weight = consistency_loss_weight
-        self.ensemble_training_enabled = False
         # Exponential learning rate schedule
         # self.lr_init = lr_init
         # self.lr_decay_rate = 0.1
@@ -130,9 +130,12 @@ def ensemble_dynamics_cartpole_config() -> MuZeroConfig:
     config.network = EnsembleCartPoleNetwork
     config.network_args['num_dynamics_models'] = 5
     config.network_args['selection_probability'] = 0.9
-    config.ensemble_training_enabled = True
     return config
 
+def ensemble_dynamics_uncertainty_exploration_cartpole_config() -> MuZeroConfig:
+    config = ensemble_dynamics_cartpole_config()
+    config.root_uncertainty_exploration_fraction = 0.2
+    return config
 
 """
 Legacy configs from the DeepMind's pseudocode.
