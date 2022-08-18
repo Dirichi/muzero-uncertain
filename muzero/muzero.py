@@ -1,4 +1,5 @@
 import argparse
+import tensorflow as tf
 
 from config import MuZeroConfig, default_cartpole_config, consistency_cartpole_config, ensemble_dynamics_cartpole_config
 from networks.shared_storage import SharedStorage
@@ -20,6 +21,8 @@ def muzero(config: MuZeroConfig):
     In contrast to the original MuZero algorithm this version doesn't works with
     multiple threads, therefore the training and self-play is done alternately.
     """
+    # Disable logging for interactive training
+    tf.keras.utils.disable_interactive_logging()
     storage = SharedStorage(config.new_network(), config.uniform_network(), config.new_optimizer())
     replay_buffer = ReplayBuffer(config)
 
