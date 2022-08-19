@@ -5,6 +5,7 @@ import random
 from typing import List
 
 import numpy
+import tensorflow as tf
 
 from config import MuZeroConfig
 from game.game import Player, Action, ActionHistory
@@ -22,7 +23,6 @@ def add_exploration_noise(config: MuZeroConfig, node: Node):
     frac = config.root_exploration_fraction
     for a, n in zip(actions, noise):
         node.children[a].prior = node.children[a].prior * (1 - frac) + n * frac
-
 
 def run_mcts(config: MuZeroConfig, root: Node, action_history: ActionHistory, network: BaseNetwork):
     """
@@ -47,7 +47,7 @@ def run_mcts(config: MuZeroConfig, root: Node, action_history: ActionHistory, ne
         # hidden state given an action and the previous hidden state.
         parent = search_path[-2]
         network_output = network.recurrent_inference(parent.hidden_state, history.last_action())
-        expand_node(node, history.to_play(), history.action_space(), network_output)
+        expand_node(node, history.to_play(), history.action_space(), network_output, config)
 
         backpropagate(search_path, network_output.value, history.to_play(), config.discount, min_max_stats)
 
@@ -81,14 +81,16 @@ def ucb_score(config: MuZeroConfig, parent: Node, child: Node,
 
 
 def expand_node(node: Node, to_play: Player, actions: List[Action],
-                network_output: NetworkOutput):
+                network_output: NetworkOutput, config: MuZeroConfig):
     """
     We expand a node using the value, reward and policy prediction obtained from
     the neural networks.
     """
     node.to_play = to_play
     node.hidden_state = network_output.hidden_state
-    node.reward = network_output.reward
+    uncertainty = network_output.uncertainty
+    exploration_ratio = config.uncertainty_exploration_prob
+    node.reward = (network_output.reward * (1 - exploration_ratio)) + (uncertainty * exploration_ratio)
     policy = {a: math.exp(network_output.policy_logits[a]) for a in actions}
     policy_sum = sum(policy.values())
     for action, p in policy.items():

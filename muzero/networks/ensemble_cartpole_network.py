@@ -11,21 +11,21 @@ from game.game import Action
 from networks.network import UncertaintyAwareBaseNetwork
 
 class EnsembleModel(Model):
-  def __init__(self, models, selection_probability) -> None:
+  def __init__(self, models, selection_size) -> None:
       super(EnsembleModel, self).__init__()
       self.models = models
-      self.selection_probability = selection_probability
+      self.selection_size = selection_size
 
   def call(self, input, train=False):
     outputs = []
-    selection_prob = self.selection_probability if train else 1
-    for model in self.models:
-      if random.random() < selection_prob:
-        outputs.append(model(input))
+    selected_models = random.sample(self.models, self.selection_size) if train else self.models
+    for model in selected_models:
+      outputs.append(model(input))
 
     prediction = tf.reduce_mean(outputs, axis=0)
-    uncertainty = tf.math.reduce_std(outputs, axis=0)
-    return prediction, uncertainty
+    variance = tf.math.reduce_variance(outputs, axis=0)
+    uncertainty_score = tf.reduce_mean(variance, axis=-1)
+    return prediction, uncertainty_score
 
 class EnsembleCartPoleNetwork(UncertaintyAwareBaseNetwork):
 
@@ -35,7 +35,7 @@ class EnsembleCartPoleNetwork(UncertaintyAwareBaseNetwork):
                  representation_size: int,
                  max_value: int,
                  num_dynamics_models: int,
-                 selection_probability: float,
+                 selection_size: int,
                  hidden_neurons: int = 64,
                  weight_decay: float = 1e-4,
                  representation_activation: str = 'tanh'):
@@ -43,7 +43,7 @@ class EnsembleCartPoleNetwork(UncertaintyAwareBaseNetwork):
         self.action_size = action_size
         self.value_support_size = math.ceil(math.sqrt(max_value)) + 1
         self.num_dynamics_models = num_dynamics_models
-        self.selection_probability = selection_probability
+        self.selection_size = selection_size
 
         regularizer = regularizers.l2(weight_decay)
         representation_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
@@ -93,4 +93,4 @@ class EnsembleCartPoleNetwork(UncertaintyAwareBaseNetwork):
                                       Dense(representation_size, activation=representation_activation,
                                             kernel_regularizer=regularizer)])
           networks.append(network)
-        return EnsembleModel(networks, self.selection_probability)
+        return EnsembleModel(networks, self.selection_size)
