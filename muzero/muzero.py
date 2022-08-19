@@ -22,7 +22,8 @@ def muzero(config: MuZeroConfig):
     multiple threads, therefore the training and self-play is done alternately.
     """
     # Disable logging for interactive training
-    tf.keras.utils.disable_interactive_logging()
+    if 'disable_interactive_logging':
+        tf.keras.utils.disable_interactive_logging()
     storage = SharedStorage(config.new_network(), config.uniform_network(), config.new_optimizer())
     replay_buffer = ReplayBuffer(config)
 
