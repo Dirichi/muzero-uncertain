@@ -1,13 +1,16 @@
 """Training module: this is where MuZero neurons are trained."""
 
+import math
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.losses import MSE
+from typing import List
 
 from config import MuZeroConfig
 from networks.network import BaseNetwork
 from networks.shared_storage import SharedStorage
 from training.replay_buffer import ReplayBuffer
+from tensorflow.keras.models import Model
 
 
 def train_network(config: MuZeroConfig, storage: SharedStorage, replay_buffer: ReplayBuffer, epochs: int):
@@ -27,7 +30,6 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
 
     def loss():
         loss = 0
-        all_reccurrent_model_vars_initialized = False
         image_batch, targets_init_batch, targets_time_batch, actions_time_batch, mask_time_batch, dynamic_mask_time_batch = batch
 
         # Initial step, from the real observation: representation + prediction networks
@@ -87,6 +89,11 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
                      tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch)) +
                 weighted_consistency_loss)
 
+            if config.diversity_loss_weight > 0:
+                diversity_loss = theil_index_loss(network.dynamic_network.models)
+                weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
+                l += weighted_diversity_loss
+
             # Scale the gradient of the loss by the average number of actions unrolled
             gradient_scale = 1. / len(actions_time_batch)
             loss += scale_gradient(l, gradient_scale)
@@ -110,3 +117,13 @@ def loss_value(target_value_batch, value_batch, value_support_size: int):
     targets[range(batch_size), floor_value.astype(int) + 1] = rest
 
     return tf.nn.softmax_cross_entropy_with_logits(logits=value_batch, labels=targets)
+
+def theil_index_loss(models: List[Model]) -> float:
+    norms = [tf.norm(model.get_weights()) for model in models]
+    mean_norm = tf.reduce_mean(norms)
+    total_loss = 0
+    for norm in norms:
+        curr_loss = (norm / mean_norm) * math.log(norm / mean_norm)
+        total_loss += curr_loss
+    # Return a negative value because we want to encourage diveristy
+    return -total_loss / len(models)

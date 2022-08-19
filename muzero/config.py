@@ -78,6 +78,7 @@ class MuZeroConfig(object):
         self.network = network
         self.lr = lr
         self.consistency_loss_weight = consistency_loss_weight
+        self.diversity_loss_weight = 0
         # Exponential learning rate schedule
         # self.lr_init = lr_init
         # self.lr_decay_rate = 0.1
@@ -129,16 +130,20 @@ def ensemble_dynamics_cartpole_config() -> MuZeroConfig:
     config = consistency_cartpole_config()
     config.network = EnsembleCartPoleNetwork
     config.network_args['num_dynamics_models'] = 5
-    config.network_args['selection_size'] = 4
     return config
 
-def partial_uncertainty_exploration_cartpole_config() -> MuZeroConfig:
+def uncertainty_exploration_cartpole_config() -> MuZeroConfig:
     config = ensemble_dynamics_cartpole_config()
     config.uncertainty_exploration_prob = 0.25
     return config
 
+def uncertainty_exploration_and_diversity_cartpole_config() -> MuZeroConfig:
+    config = uncertainty_exploration_cartpole_config()
+    config.diversity_loss_weight = 0.25
+    return config
+
 def full_uncertainty_exploration_cartpole_config() -> MuZeroConfig:
-    config = partial_uncertainty_exploration_cartpole_config()
+    config = uncertainty_exploration_cartpole_config()
     config.uncertainty_exploration_prob = 1.0
     return config
 
