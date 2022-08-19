@@ -13,7 +13,7 @@ class NetworkOutput(typing.NamedTuple):
     reward: float
     policy_logits: Dict[Action, float]
     hidden_state: typing.Optional[List[float]]
-    uncertainty: List[float] = []
+    uncertainty: float = 0.0
 
     @staticmethod
     def build_policy_logits(policy_logits):
