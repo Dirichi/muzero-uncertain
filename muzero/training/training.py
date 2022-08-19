@@ -114,11 +114,20 @@ def loss_value(target_value_batch, value_batch, value_support_size: int):
     return tf.nn.softmax_cross_entropy_with_logits(logits=value_batch, labels=targets)
 
 def theil_index_loss(models: List[Model]) -> float:
-    norms = [tf.norm(model.get_weights()) for model in models]
-    mean_norm = tf.reduce_mean(norms)
-    total_loss = 0
-    for norm in norms:
-        curr_loss = (norm / mean_norm) * math.log(norm / mean_norm)
-        total_loss += curr_loss
-    # Return a negative value because we want to encourage diveristy
-    return -total_loss / len(models)
+    weights = [model.get_weights() for model in models]
+    total_entropy = 0
+    num_layers = len(models[0].get_weights())
+    for layer_idx in range(num_layers):
+        layer_weights = [weight[layer_idx] for weight in weights]
+        total_entropy += layer_entropy(layer_weights)
+    # Return a negative value because we want to increase entropy and encourage diveristy
+    return -total_entropy / num_layers
+
+def layer_entropy(layer_weights) -> float:
+    weight_norms = [tf.norm(layer_weight) for layer_weight in layer_weights]
+    mean_norm = sum(weight_norms) / len(weight_norms)
+    layer_weight_entropies = [entropy(norm / mean_norm) for norm in weight_norms]
+    return sum(layer_weight_entropies) / len(layer_weight_entropies)
+
+def entropy(value: float) -> float:
+    return value * math.log(value)
