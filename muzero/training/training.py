@@ -65,11 +65,6 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
 
             # Recurrent step from conditioned representation: recurrent + prediction networks
             conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
-            # HACK: Avoid variable uninitialized errors for the ensemble model
-            # by calling it on input to initialize all vars.
-            if not all_reccurrent_model_vars_initialized:
-                network.recurrent_model(conditioned_representation_batch, train=False)
-                all_reccurrent_model_vars_initialized = True
 
             representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
                     conditioned_representation_batch, train=True)
