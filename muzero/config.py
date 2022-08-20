@@ -138,7 +138,7 @@ def default_minigrid_config() -> MuZeroConfig:
         nb_training_loop=50,
         nb_episodes=20,
         nb_epochs=20,
-        network_args={'action_size': 2,
+        network_args={'action_size': 7,
                       'representation_size': 8,
                       'value_support_size': 10,
                       'num_dynamics_models': 5,
