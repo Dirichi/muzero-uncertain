@@ -145,7 +145,8 @@ class BaseNetwork(AbstractNetwork):
         """dynamics + prediction function"""
 
         conditioned_hidden = self._conditioned_hidden_state(hidden_state, action)
-        hidden_representation, reward, value, policy_logits = self.recurrent_model.predict(conditioned_hidden)
+        # Uncertainty is None
+        hidden_representation, reward, value, policy_logits, _ = self.recurrent_model.predict(conditioned_hidden)
         output = NetworkOutput(value=self._value_transform(value),
                                reward=self._reward_transform(reward),
                                policy_logits=NetworkOutput.build_policy_logits(policy_logits),
