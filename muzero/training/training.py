@@ -1,13 +1,16 @@
 """Training module: this is where MuZero neurons are trained."""
 
+import math
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.losses import MSE
+from typing import List
 
 from config import MuZeroConfig
 from networks.network import BaseNetwork
 from networks.shared_storage import SharedStorage
 from training.replay_buffer import ReplayBuffer
+from tensorflow.keras.models import Model
 
 
 def train_network(config: MuZeroConfig, storage: SharedStorage, replay_buffer: ReplayBuffer, epochs: int):
@@ -27,7 +30,6 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
 
     def loss():
         loss = 0
-        all_reccurrent_model_vars_initialized = False
         image_batch, targets_init_batch, targets_time_batch, actions_time_batch, mask_time_batch, dynamic_mask_time_batch = batch
 
         # Initial step, from the real observation: representation + prediction networks
@@ -63,11 +65,6 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
 
             # Recurrent step from conditioned representation: recurrent + prediction networks
             conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
-            # HACK: Avoid variable uninitialized errors for the ensemble model
-            # by calling it on input to initialize all vars.
-            if not all_reccurrent_model_vars_initialized:
-                network.recurrent_model(conditioned_representation_batch, train=False)
-                all_reccurrent_model_vars_initialized = True
 
             representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
                     conditioned_representation_batch, train=True)
@@ -94,6 +91,11 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
             # Half the gradient of the representation
             representation_batch = scale_gradient(representation_batch, 0.5)
 
+        if config.diversity_loss_weight > 0:
+            diversity_loss = theil_index_loss(network.dynamic_network.models)
+            weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
+            loss += weighted_diversity_loss
+
         return loss
 
     optimizer.minimize(loss=loss, var_list=network.cb_get_variables())
@@ -110,3 +112,22 @@ def loss_value(target_value_batch, value_batch, value_support_size: int):
     targets[range(batch_size), floor_value.astype(int) + 1] = rest
 
     return tf.nn.softmax_cross_entropy_with_logits(logits=value_batch, labels=targets)
+
+def theil_index_loss(models: List[Model]) -> float:
+    weights = [model.get_weights() for model in models]
+    total_entropy = 0
+    num_layers = len(models[0].get_weights())
+    for layer_idx in range(num_layers):
+        layer_weights = [weight[layer_idx] for weight in weights]
+        total_entropy += layer_entropy(layer_weights)
+    # Return a negative value because we want to increase entropy and encourage diveristy
+    return -total_entropy / num_layers
+
+def layer_entropy(layer_weights) -> float:
+    weight_norms = [tf.norm(layer_weight) for layer_weight in layer_weights]
+    mean_norm = sum(weight_norms) / len(weight_norms)
+    layer_weight_entropies = [entropy(norm / mean_norm) for norm in weight_norms]
+    return sum(layer_weight_entropies) / len(layer_weight_entropies)
+
+def entropy(value: float) -> float:
+    return value * math.log(value)
