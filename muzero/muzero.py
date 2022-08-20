@@ -1,7 +1,7 @@
 import argparse
 import tensorflow as tf
 
-from config import MuZeroConfig, default_cartpole_config, consistency_cartpole_config, ensemble_dynamics_cartpole_config, uncertainty_exploration_cartpole_config, full_uncertainty_exploration_cartpole_config, uncertainty_exploration_and_diversity_cartpole_config
+from config import MuZeroConfig, default_cartpole_config, consistency_cartpole_config, ensemble_dynamics_cartpole_config, uncertainty_exploration_cartpole_config, full_uncertainty_exploration_cartpole_config, uncertainty_exploration_and_diversity_cartpole_config, default_minigrid_config
 from networks.shared_storage import SharedStorage
 from self_play.self_play import run_selfplay, run_eval
 from training.replay_buffer import ReplayBuffer
@@ -52,6 +52,7 @@ if __name__ == '__main__':
         "ENSEMBLE_CONSISTENCY_WITH_EXPLORATION": uncertainty_exploration_cartpole_config(),
         "ENSEMBLE_CONSISTENCY_PURE_EXPLORATION": full_uncertainty_exploration_cartpole_config(),
         "ENSEMBLE_CONSISTENCY_WITH_EXPLORATION_AND_DIVERSITY": uncertainty_exploration_and_diversity_cartpole_config(),
+        "MINIGRID": default_minigrid_config(),
     }
     config = config_mapping.get(args.config, None)
     if config:

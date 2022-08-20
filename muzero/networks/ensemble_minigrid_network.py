@@ -1,29 +1,22 @@
-import math
-
 import numpy as np
-import tensorflow as tf
-import random
 from tensorflow.keras import regularizers, Sequential
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.models import Model
 
 from game.game import Action
 from networks.network import UncertaintyAwareBaseNetwork, EnsembleModel
 
-class EnsembleCartPoleNetwork(UncertaintyAwareBaseNetwork):
+class EnsembleMiniGridNetwork(UncertaintyAwareBaseNetwork):
 
     def __init__(self,
-                 state_size: int,
                  action_size: int,
                  representation_size: int,
-                 max_value: int,
+                 value_support_size: int,
                  num_dynamics_models: int,
                  hidden_neurons: int = 64,
                  weight_decay: float = 1e-4,
                  representation_activation: str = 'tanh'):
-        self.state_size = state_size
         self.action_size = action_size
-        self.value_support_size = math.ceil(math.sqrt(max_value)) + 1
+        self.value_support_size = value_support_size
         self.num_dynamics_models = num_dynamics_models
 
         regularizer = regularizers.l2(weight_decay)

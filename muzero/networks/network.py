@@ -3,9 +3,25 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Callable
 
 import numpy as np
+import tensorflow as tf
 from tensorflow.keras.models import Model
 
 from game.game import Action
+
+class EnsembleModel(Model):
+  def __init__(self, models) -> None:
+      super(EnsembleModel, self).__init__()
+      self.models = models
+
+  def call(self, input, train=False):
+    outputs = []
+    for model in self.models:
+      outputs.append(model(input))
+
+    prediction = tf.reduce_mean(outputs, axis=0)
+    variance = tf.math.reduce_variance(outputs, axis=0)
+    uncertainty_score = tf.reduce_mean(variance, axis=-1)
+    return prediction, uncertainty_score
 
 
 class NetworkOutput(typing.NamedTuple):
