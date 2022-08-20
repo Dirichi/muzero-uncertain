@@ -144,7 +144,7 @@ def default_minigrid_config() -> MuZeroConfig:
                       'num_dynamics_models': 5,
                       'hidden_neurons': 16},
         network=EnsembleMiniGridNetwork,
-        action_space_size=3,
+        action_space_size=7,
         max_moves=15,
         discount=0.99,
         dirichlet_alpha=0.25,
