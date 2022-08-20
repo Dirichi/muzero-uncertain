@@ -41,6 +41,8 @@ class MiniGrid(AbstractGame):
         self.env = FlatImgObsWrapper(self.env)
         self.env = ScalingObservationWrapper(self.env)
         self.actions = list(map(lambda i: Action(i), range(self.env.action_space.n)))
+        # See https://github.com/werner-duvaud/muzero-general/blob/master/games/gridworld.py#L160
+        self._legal_actions = [action for action in self.actions if action.index < 3]
         self.observations = [self.env.reset()]
         self.done = False
 
@@ -63,7 +65,7 @@ class MiniGrid(AbstractGame):
 
     def legal_actions(self) -> List[Action]:
         """Return the legal actions available at this instant."""
-        return self.actions
+        return self._legal_actions
 
     def make_image(self, state_index: int):
         """Compute the state of the game."""
