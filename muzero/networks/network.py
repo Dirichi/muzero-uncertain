@@ -13,7 +13,7 @@ class EnsembleModel(Model):
       super(EnsembleModel, self).__init__()
       self.models = models
 
-  def call(self, input, train=False):
+  def call(self, input):
     outputs = []
     for model in self.models:
       outputs.append(model(input))
@@ -90,8 +90,8 @@ class RecurrentModel(Model):
         self.value_network = value_network
         self.policy_network = policy_network
 
-    def call(self, conditioned_hidden, train=False):
-        hidden_representation = self.dynamic_network(conditioned_hidden, train=train)
+    def call(self, conditioned_hidden):
+        hidden_representation = self.dynamic_network(conditioned_hidden)
         reward = self.reward_network(conditioned_hidden)
         value = self.value_network(hidden_representation)
         policy_logits = self.policy_network(hidden_representation)
@@ -105,8 +105,8 @@ class UncertaintyAwareRecurrentModel(RecurrentModel):
     def __init__(self, dynamic_network: Model, reward_network: Model, value_network: Model, policy_network: Model):
         super(UncertaintyAwareRecurrentModel, self).__init__(dynamic_network, reward_network, value_network, policy_network)
 
-    def call(self, conditioned_hidden, train=False):
-        hidden_representation, uncertainty = self.dynamic_network(conditioned_hidden, train=train)
+    def call(self, conditioned_hidden):
+        hidden_representation, uncertainty = self.dynamic_network(conditioned_hidden)
         reward = self.reward_network(conditioned_hidden)
         value = self.value_network(hidden_representation)
         policy_logits = self.policy_network(hidden_representation)
