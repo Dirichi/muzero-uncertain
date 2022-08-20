@@ -1,27 +1,35 @@
 from typing import List
+import operator
+from functools import reduce
 
 import gym
-import gym_minigrid
 from gym.core import ObservationWrapper
 
 from game.game import Action, AbstractGame
 from game.gym_wrappers import ScalingObservationWrapper
 
 
-# Copied from gym_minigrid because of an issue with gym_minigrd.wrappers
-# Can be swapped out for `from gym_minigrid.wrappers import ImgObsWrapper`
-# when the gym_minigrid issue is fixed.
-class ImgObsWrapper(ObservationWrapper):
+class FlatImgObsWrapper(ObservationWrapper):
     """
-    Use the image as the only observation output, no language/mission.
+    Encode the observed images into one flat array
     """
 
     def __init__(self, env):
         super().__init__(env, new_step_api=env.new_step_api)
-        self.observation_space = env.observation_space.spaces["image"]
+
+        imgSpace = env.observation_space.spaces["image"]
+        imgSize = reduce(operator.mul, imgSpace.shape, 1)
+
+        self.observation_space = gym.spaces.Box(
+            low=0,
+            high=255,
+            shape=(imgSize,),
+            dtype="uint8",
+        )
 
     def observation(self, obs):
-        return obs["image"]
+        image = obs["image"]
+        return image.flatten()
 
 
 class MiniGrid(AbstractGame):
@@ -30,7 +38,7 @@ class MiniGrid(AbstractGame):
     def __init__(self, discount: float):
         super().__init__(discount)
         self.env = gym.make("MiniGrid-Empty-5x5-v0")
-        self.env = ImgObsWrapper(self.env)
+        self.env = FlatImgObsWrapper(self.env)
         self.env = ScalingObservationWrapper(self.env)
         self.actions = list(map(lambda i: Action(i), range(self.env.action_space.n)))
         self.observations = [self.env.reset()]
