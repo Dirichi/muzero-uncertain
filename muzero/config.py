@@ -7,7 +7,8 @@ from game.cartpole import CartPole
 from game.minigrid import MiniGrid
 from game.game import AbstractGame
 from networks.ensemble_cartpole_network import EnsembleCartPoleNetwork
-from networks.ensemble_minigrid_network import EnsembleMiniGridNetwork, MiniGridNetwork
+from networks.ensemble_minigrid_network import EnsembleMiniGridNetwork
+from networks.minigrid_network import MiniGridNetwork
 from networks.cartpole_network import CartPoleNetwork
 from networks.network import BaseNetwork, UniformNetwork
 
