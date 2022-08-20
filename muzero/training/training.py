@@ -84,17 +84,17 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
                      tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch)) +
                 weighted_consistency_loss)
 
-            if config.diversity_loss_weight > 0:
-                diversity_loss = theil_index_loss(network.dynamic_network.models)
-                weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
-                l += weighted_diversity_loss
-
             # Scale the gradient of the loss by the average number of actions unrolled
             gradient_scale = 1. / len(actions_time_batch)
             loss += scale_gradient(l, gradient_scale)
 
             # Half the gradient of the representation
             representation_batch = scale_gradient(representation_batch, 0.5)
+
+        if config.diversity_loss_weight > 0:
+            diversity_loss = theil_index_loss(network.dynamic_network.models)
+            weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
+            loss += weighted_diversity_loss
 
         return loss
 
