@@ -7,7 +7,7 @@ from game.cartpole import CartPole
 from game.minigrid import MiniGrid
 from game.game import AbstractGame
 from networks.ensemble_cartpole_network import EnsembleCartPoleNetwork
-from networks.ensemble_minigrid_network import EnsembleMiniGridNetwork
+from networks.ensemble_minigrid_network import EnsembleMiniGridNetwork, MiniGridNetwork
 from networks.cartpole_network import CartPoleNetwork
 from networks.network import BaseNetwork, UniformNetwork
 
@@ -123,39 +123,6 @@ def default_cartpole_config() -> MuZeroConfig:
         visit_softmax_temperature_fn=visit_softmax_temperature,
         lr=0.05)
 
-# Inspired by https://github.com/werner-duvaud/muzero-general/blob/master/games/gridworld.py
-def default_minigrid_config() -> MuZeroConfig:
-    def visit_softmax_temperature(num_moves, training_steps):
-        if num_moves < 0.5 * training_steps:
-            return 1.0
-        elif num_moves < 0.75 * training_steps:
-            return 0.5
-        else:
-            return 0.25
-
-    config = MuZeroConfig(
-        game=MiniGrid,
-        nb_training_loop=50,
-        nb_episodes=20,
-        nb_epochs=20,
-        network_args={'action_size': 7,
-                      'representation_size': 8,
-                      'value_support_size': 10,
-                      'num_dynamics_models': 5,
-                      'hidden_neurons': 16},
-        network=EnsembleMiniGridNetwork,
-        action_space_size=7,
-        max_moves=15,
-        discount=0.99,
-        dirichlet_alpha=0.25,
-        num_simulations=20,
-        batch_size=128,
-        td_steps=20,
-        visit_softmax_temperature_fn=visit_softmax_temperature,
-        lr=0.05)
-    config.num_unroll_steps = 10
-    return config
-
 def consistency_cartpole_config() -> MuZeroConfig:
     config = default_cartpole_config()
     config.consistency_loss_weight = 0.5
@@ -179,6 +146,65 @@ def uncertainty_exploration_and_diversity_cartpole_config() -> MuZeroConfig:
 
 def full_uncertainty_exploration_cartpole_config() -> MuZeroConfig:
     config = uncertainty_exploration_cartpole_config()
+    config.uncertainty_exploration_prob = 1.0
+    return config
+
+# Inspired by https://github.com/werner-duvaud/muzero-general/blob/master/games/gridworld.py
+def default_minigrid_config() -> MuZeroConfig:
+    def visit_softmax_temperature(num_moves, training_steps):
+        if num_moves < 0.5 * training_steps:
+            return 1.0
+        elif num_moves < 0.75 * training_steps:
+            return 0.5
+        else:
+            return 0.25
+
+    config = MuZeroConfig(
+        game=MiniGrid,
+        nb_training_loop=50,
+        nb_episodes=20,
+        nb_epochs=20,
+        network_args={'action_size': 7,
+                      'representation_size': 7,
+                      'value_support_size': 10,
+                      'hidden_neurons': 16},
+        network=MiniGridNetwork,
+        action_space_size=7,
+        max_moves=15,
+        discount=0.99,
+        dirichlet_alpha=0.25,
+        num_simulations=20,
+        batch_size=128,
+        td_steps=20,
+        visit_softmax_temperature_fn=visit_softmax_temperature,
+        lr=0.05)
+    config.num_unroll_steps = 10
+    return config
+
+
+def consistency_grid_config() -> MuZeroConfig:
+    config = default_minigrid_config()
+    config.consistency_loss_weight = 0.5
+    return config
+
+def ensemble_dynamics_grid_config() -> MuZeroConfig:
+    config = consistency_grid_config()
+    config.network = EnsembleMiniGridNetwork
+    config.network_args['num_dynamics_models'] = 5
+    return config
+
+def uncertainty_exploration_grid_config() -> MuZeroConfig:
+    config = ensemble_dynamics_grid_config()
+    config.uncertainty_exploration_prob = 0.25
+    return config
+
+def uncertainty_exploration_and_diversity_grid_config() -> MuZeroConfig:
+    config = uncertainty_exploration_grid_config()
+    config.diversity_loss_weight = 1e-6
+    return config
+
+def full_uncertainty_exploration_config() -> MuZeroConfig:
+    config = uncertainty_exploration_and_diversity_grid_config()
     config.uncertainty_exploration_prob = 1.0
     return config
 
