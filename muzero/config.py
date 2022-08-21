@@ -166,7 +166,7 @@ def default_minigrid_config() -> MuZeroConfig:
         nb_episodes=20,
         nb_epochs=20,
         network_args={'action_size': 7,
-                      'representation_size': 7,
+                      'representation_size': 192, # {8, 8, 3}
                       'value_support_size': 10,
                       'hidden_neurons': 16},
         network=MiniGridNetwork,
@@ -178,8 +178,9 @@ def default_minigrid_config() -> MuZeroConfig:
         batch_size=128,
         td_steps=20,
         visit_softmax_temperature_fn=visit_softmax_temperature,
-        lr=0.05)
+        lr=0.005)
     config.num_unroll_steps = 10
+    config.window_size = 5000
     return config
 
 

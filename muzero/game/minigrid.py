@@ -37,7 +37,7 @@ class MiniGrid(AbstractGame):
 
     def __init__(self, discount: float):
         super().__init__(discount)
-        self.env = gym.make("MiniGrid-Empty-5x5-v0")
+        self.env = gym.make("MiniGrid-Empty-Random-6x6-v0")
         self.env = FlatImgObsWrapper(self.env)
         self.env = ScalingObservationWrapper(self.env)
         self.actions = list(map(lambda i: Action(i), range(self.env.action_space.n)))
