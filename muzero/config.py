@@ -162,7 +162,7 @@ def default_minigrid_config() -> MuZeroConfig:
 
     config = MuZeroConfig(
         game=MiniGrid,
-        nb_training_loop=50,
+        nb_training_loop=300,
         nb_episodes=20,
         nb_epochs=20,
         network_args={'action_size': 7,
