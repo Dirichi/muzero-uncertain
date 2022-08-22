@@ -166,7 +166,7 @@ def default_minigrid_config() -> MuZeroConfig:
         nb_episodes=20,
         nb_epochs=20,
         network_args={'action_size': 7,
-                      'representation_size': 192, # {8, 8, 3}
+                      'representation_size': 10,
                       'value_support_size': 10,
                       'hidden_neurons': 16},
         network=MiniGridNetwork,
