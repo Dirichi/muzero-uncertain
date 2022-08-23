@@ -32,7 +32,7 @@ def train_ensemble_aware_network(config: MuZeroConfig, storage: SharedStorage, r
 
     for _ in range(epochs):
         batch = replay_buffer.sample_batch(config.num_unroll_steps, config.td_steps)
-        update_ensemble_dynamics_model(config, optimizer, network, accumulator, batch)
+        update_ensemble_dynamics_model(config, optimizer, network, batch)
         update_weights(config, optimizer, network, accumulator, batch)
         storage.save_network(network.training_steps, network)
 
