@@ -60,7 +60,8 @@ def update_ensemble_dynamics_model(config: MuZeroConfig, optimizer: tf.keras.opt
     variables = [variables
             for variables_list in map(lambda n: n.trainable_weights, network.dynamic_network.models)
             for variables in variables_list]
-    optimizer.minimize(loss=loss, var_list=variables)
+    var_list_fn = lambda: variables
+    optimizer.minimize(loss=loss, var_list=var_list_fn)
 
 
 
