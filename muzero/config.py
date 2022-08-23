@@ -162,7 +162,7 @@ def default_minigrid_config() -> MuZeroConfig:
 
     config = MuZeroConfig(
         game=MiniGrid,
-        nb_training_loop=300,
+        nb_training_loop=50,
         nb_episodes=20,
         nb_epochs=20,
         network_args={'action_size': 7,
@@ -174,12 +174,11 @@ def default_minigrid_config() -> MuZeroConfig:
         max_moves=20,
         discount=0.99,
         dirichlet_alpha=0.25,
-        num_simulations=20,
-        batch_size=128,
-        td_steps=20,
+        num_simulations=11,
+        batch_size=512,
+        td_steps=10,
         visit_softmax_temperature_fn=visit_softmax_temperature,
-        lr=0.005)
-    config.num_unroll_steps = 10
+        lr=0.05)
     config.window_size = 5000
     return config
 
