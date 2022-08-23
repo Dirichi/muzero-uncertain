@@ -55,7 +55,7 @@ def update_ensemble_dynamics_model(config: MuZeroConfig, optimizer: tf.keras.opt
         diversity_loss = theil_index_loss(network.dynamic_network.models)
         weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
         total_loss += weighted_diversity_loss
-        return loss
+        return total_loss
 
     def get_weights_fn():
         def get_weights():
