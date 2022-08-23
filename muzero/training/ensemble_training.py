@@ -48,13 +48,14 @@ def update_ensemble_dynamics_model(config: MuZeroConfig, optimizer: tf.keras.opt
         dynamics_loss(network, batch, model)
 
     def loss():
-      total_loss = 0
-      for model in network.dynamic_network.models:
-        total_loss += dynamics_loss(network, batch, model)
+        total_loss = 0
+        for model in network.dynamic_network.models:
+            total_loss += dynamics_loss(network, batch, model)
 
-      diversity_loss = theil_index_loss(network.dynamic_network.models)
-      weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
-      total_loss += weighted_diversity_loss
+        diversity_loss = theil_index_loss(network.dynamic_network.models)
+        weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
+        total_loss += weighted_diversity_loss
+        return loss
 
     variables = [variables
             for variables_list in map(lambda n: n.trainable_weights, network.dynamic_network.models)
