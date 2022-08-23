@@ -43,9 +43,9 @@ def scale_gradient(tensor, scale: float):
     return (1. - scale) * tf.stop_gradient(tensor) + scale * tensor
 
 def update_ensemble_dynamics_model(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
-    # for model in network.dynamic_network.models:
-    #     # Call once to initialize model
-    #     dynamics_loss(network, batch, model)
+    for model in network.dynamic_network.models:
+        # Call once to initialize model
+        dynamics_loss(network, batch, model)
 
     def loss():
         total_loss = 0
@@ -57,11 +57,14 @@ def update_ensemble_dynamics_model(config: MuZeroConfig, optimizer: tf.keras.opt
         total_loss += weighted_diversity_loss
         return loss
 
-    variables = [variables
-            for variables_list in map(lambda n: n.weights, network.dynamic_network.models)
-            for variables in variables_list]
-    var_list_fn = lambda: variables
-    optimizer.minimize(loss=loss, var_list=var_list_fn)
+    def get_weights_fn():
+        def get_weights():
+            variables = [variables
+                    for variables_list in map(lambda n: n.trainable_weights, network.dynamic_network.models)
+                    for variables in variables_list]
+            return variables
+        return get_weights
+    optimizer.minimize(loss=loss, var_list=get_weights_fn())
 
 
 
