@@ -43,6 +43,10 @@ def scale_gradient(tensor, scale: float):
     return (1. - scale) * tf.stop_gradient(tensor) + scale * tensor
 
 def update_ensemble_dynamics_model(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
+    for model in network.dynamic_network.models:
+        # Call once to initialize model
+        dynamics_loss(optimizer, network, batch, model)
+
     def loss():
       total_loss = 0
       for model in network.dynamic_network.models:
