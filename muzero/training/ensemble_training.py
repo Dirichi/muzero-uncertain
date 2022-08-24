@@ -175,7 +175,16 @@ def update_weights(optimizer: tf.keras.optimizers, network: BaseNetwork, accumul
 
         return loss
 
-    optimizer.minimize(loss=loss, var_list=network.cb_get_variables())
+    def cb_get_variables():
+        def get_variables():
+            networks = (network.representation_network, network.value_network, network.policy_network, network.reward_network)
+            return [variables
+                    for variables_list in map(lambda n: n.weights, networks)
+                    for variables in variables_list]
+
+        return get_variables
+
+    optimizer.minimize(loss=loss, var_list=cb_get_variables())
     network.training_steps += 1
 
 
