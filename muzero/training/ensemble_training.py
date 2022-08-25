@@ -49,6 +49,7 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
 
     def loss():
         loss = 0
+        all_weights_initialized = False
         image_batch, targets_init_batch, targets_time_batch, actions_time_batch, mask_time_batch, dynamic_mask_time_batch = batch
 
         # Initial step, from the real observation: representation + prediction networks
@@ -84,6 +85,10 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
 
             # Recurrent step from conditioned representation: recurrent + prediction networks
             conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
+            # HACK: Initialize all weights
+            if not all_weights_initialized:
+                network.recurrent_model(conditioned_representation_batch)
+                all_weights_initialized = True
 
             representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
                     conditioned_representation_batch, selection_mask=ensemble_mask)
