@@ -1,4 +1,5 @@
 import typing
+import random
 from abc import ABC, abstractmethod
 from typing import Dict, List, Callable
 
@@ -12,15 +13,18 @@ class EnsembleModel(Model):
   def __init__(self, models) -> None:
       super(EnsembleModel, self).__init__()
       self.models = models
+      self.selected_model_id = random.randint(0, len(self.models) - 1)
 
-  def call(self, input, selection_mask=None):
-    model_masks = selection_mask if selection_mask is not None else np.ones(len(self.models))
-    model_mask_pairs = zip(self.models, model_masks)
-    outputs = [model(input) for model, model_mask in model_mask_pairs if model_mask]
+  def call(self, input, selected_model_idx=None):
+    selected_idx = selected_model_idx if selected_model_idx is not None else self.selected_model_id
+    outputs = [model(input) for model in self.models]
 
     variance = tf.math.reduce_variance(outputs, axis=0)
     uncertainty_score = tf.reduce_mean(variance, axis=-1)
-    return outputs, uncertainty_score
+    return outputs[selected_idx], uncertainty_score
+
+  def reset_selected_model_id(self):
+      self.selected_model_id = random.randint(0, len(self.models) - 1)
 
 
 class NetworkOutput(typing.NamedTuple):
@@ -104,14 +108,11 @@ class UncertaintyAwareRecurrentModel(RecurrentModel):
     def __init__(self, dynamic_network: Model, reward_network: Model, value_network: Model, policy_network: Model):
         super(UncertaintyAwareRecurrentModel, self).__init__(dynamic_network, reward_network, value_network, policy_network)
 
-    def call(self, conditioned_hidden, selection_mask=None):
-        representations, uncertainty = self.dynamic_network(conditioned_hidden, selection_mask=selection_mask)
+    def call(self, conditioned_hidden, selected_model_idx=None):
+        hidden_representation, uncertainty = self.dynamic_network(conditioned_hidden, selected_model_idx=selected_model_idx)
         reward = self.reward_network(conditioned_hidden)
-        values = [self.value_network(representation) for representation in representations]
-        hidden_representation = tf.reduce_mean(representations, axis=0)
-        policies = [self.policy_network(representation) for representation in representations]
-        value = tf.reduce_mean(values, axis=0)
-        policy_logits = tf.reduce_mean(policies, axis=0)
+        value = self.value_network(hidden_representation)
+        policy_logits = self.policy_network(hidden_representation)
         return hidden_representation, reward, value, policy_logits, uncertainty
 
 

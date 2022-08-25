@@ -29,29 +29,21 @@ def train_ensemble_network(config: MuZeroConfig, storage: SharedStorage, replay_
     network = storage.current_network
     optimizer = storage.optimizer
     accumulator = Accumulator()
-    rng = np.random.default_rng()
-    all_weights_trained = False
 
     for _ in range(epochs):
         batch = replay_buffer.sample_batch(config.num_unroll_steps, config.td_steps)
-        ensemble_masks = np.eye(config.network_args['num_dynamics_models'])
-        rng.shuffle(ensemble_masks)
-        for ensemble_mask in ensemble_masks:
-            update_weights(config, optimizer, network, accumulator, batch, ensemble_mask, all_weights_trained)
-        all_weights_trained = True
+        update_weights(config, optimizer, network, accumulator, batch)
         storage.save_network(network.training_steps, network)
 
     return accumulator.average()
 
+def scale_gradient(tensor, scale: float):
+    """Trick function to scale the gradient in tensorflow"""
+    return (1. - scale) * tf.stop_gradient(tensor) + scale * tensor
 
-def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, accumulator: Accumulator, batch, ensemble_mask, all_weights_trained):
-    def scale_gradient(tensor, scale: float):
-        """Trick function to scale the gradient in tensorflow"""
-        return (1. - scale) * tf.stop_gradient(tensor) + scale * tensor
-
+def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, accumulator: Accumulator, batch):
     def loss():
         loss = 0
-        all_weights_initialized = False
         image_batch, targets_init_batch, targets_time_batch, actions_time_batch, mask_time_batch, dynamic_mask_time_batch = batch
 
         # Initial step, from the real observation: representation + prediction networks
@@ -68,65 +60,85 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
         loss += tf.math.reduce_mean(
             tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch))
 
-        # Recurrent steps, from action and previous hidden state.
-        for actions_batch, targets_batch, mask, dynamic_mask in zip(actions_time_batch, targets_time_batch,
-                                                                    mask_time_batch, dynamic_mask_time_batch):
-            target_value_batch, target_reward_batch, target_policy_batch, target_next_state_batch = zip(*targets_batch)
-            # Compute hidden state representation of next state. This will be
-            # used to compute consistency loss.
-            target_representation_batch = network.representation_network(np.array(target_next_state_batch))
-            target_representation_batch = tf.stop_gradient(target_representation_batch)
+        dynamics_model_ids = range(config.network_args['num_dynamics_models'])
+        rng = np.random.default_rng()
+        rng.shuffle(dynamics_model_ids)
+        for dynamics_model_id in dynamics_model_ids:
+            l = run_recurrent_steps(
+                representation_batch,
+                actions_time_batch,
+                targets_time_batch,
+                mask_time_batch,
+                dynamic_mask_time_batch,
+                network,
+                accumulator,
+                dynamics_model_id
+            )
+            l *= (1. / config.network_args['num_dynamics_models'])
+            loss += l
 
-            # Only execute BPTT for elements with an action
-            representation_batch = tf.boolean_mask(representation_batch, dynamic_mask)
-            target_value_batch = tf.boolean_mask(target_value_batch, mask)
-            target_reward_batch = tf.boolean_mask(target_reward_batch, mask)
-            target_representation_batch = tf.boolean_mask(target_representation_batch, mask)
-            # Creating conditioned_representation: concatenate representations with actions batch
-            actions_batch = tf.one_hot(actions_batch, network.action_size)
-
-            # Recurrent step from conditioned representation: recurrent + prediction networks
-            conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
-            # HACK: Initialize all weights
-            if not all_weights_initialized:
-                network.recurrent_model(conditioned_representation_batch)
-                all_weights_initialized = True
-
-            representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
-                    conditioned_representation_batch, selection_mask=ensemble_mask)
-            accumulator.add(uncertainty_batch)
-
-            # Only execute BPTT for elements with a policy target
-            target_policy_batch = [policy for policy, b in zip(target_policy_batch, mask) if b]
-            mask_policy = list(map(lambda l: bool(l), target_policy_batch))
-            target_policy_batch = tf.convert_to_tensor([policy for policy in target_policy_batch if policy])
-            policy_batch = tf.boolean_mask(policy_batch, mask_policy)
-            consistency_loss = tf.math.reduce_mean(tf.math.squared_difference(representation_batch, target_representation_batch))
-            weighted_consistency_loss = config.consistency_loss_weight * consistency_loss
-
-            # Compute the partial loss
-            l = (tf.math.reduce_mean(loss_value(target_value_batch, value_batch, network.value_support_size)) +
-                 MSE(target_reward_batch, tf.squeeze(reward_batch)) +
-                 tf.math.reduce_mean(
-                     tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch)) +
-                weighted_consistency_loss)
-
-            # Scale the gradient of the loss by the average number of actions unrolled
-            gradient_scale = 1. / len(actions_time_batch)
-            loss += scale_gradient(l, gradient_scale)
-
-            # Half the gradient of the representation
-            representation_batch = scale_gradient(representation_batch, 0.5)
-
-        if config.diversity_loss_weight > 0 and all_weights_trained:
+        if config.diversity_loss_weight > 0:
             diversity_loss = theil_index_loss(network.dynamic_network.models)
             weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
             loss += weighted_diversity_loss
 
-        return loss * (1. / len(ensemble_mask))
+        return loss
 
     optimizer.minimize(loss=loss, var_list=network.cb_get_variables())
     network.training_steps += 1
+
+def run_recurrent_steps(config, representation_batch, actions_time_batch, targets_time_batch, mask_time_batch, dynamic_mask_time_batch, network, accumulator, dynamics_model_id):
+        # Recurrent steps, from action and previous hidden state.
+    loss = 0
+    for actions_batch, targets_batch, mask, dynamic_mask in zip(actions_time_batch, targets_time_batch,
+                                                                mask_time_batch, dynamic_mask_time_batch):
+        target_value_batch, target_reward_batch, target_policy_batch, target_next_state_batch = zip(*targets_batch)
+        # Compute hidden state representation of next state. This will be
+        # used to compute consistency loss.
+        target_representation_batch = network.representation_network(np.array(target_next_state_batch))
+        target_representation_batch = tf.stop_gradient(target_representation_batch)
+
+        # Only execute BPTT for elements with an action
+        representation_batch = tf.boolean_mask(representation_batch, dynamic_mask)
+        target_value_batch = tf.boolean_mask(target_value_batch, mask)
+        target_reward_batch = tf.boolean_mask(target_reward_batch, mask)
+        target_representation_batch = tf.boolean_mask(target_representation_batch, mask)
+        # Creating conditioned_representation: concatenate representations with actions batch
+        actions_batch = tf.one_hot(actions_batch, network.action_size)
+
+        # Recurrent step from conditioned representation: recurrent + prediction networks
+        conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
+        # HACK: Initialize all weights
+        if not all_weights_initialized:
+            network.recurrent_model(conditioned_representation_batch)
+            all_weights_initialized = True
+
+        representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
+                conditioned_representation_batch, selected_model_idx=dynamics_model_id)
+        accumulator.add(uncertainty_batch)
+
+        # Only execute BPTT for elements with a policy target
+        target_policy_batch = [policy for policy, b in zip(target_policy_batch, mask) if b]
+        mask_policy = list(map(lambda l: bool(l), target_policy_batch))
+        target_policy_batch = tf.convert_to_tensor([policy for policy in target_policy_batch if policy])
+        policy_batch = tf.boolean_mask(policy_batch, mask_policy)
+        consistency_loss = tf.math.reduce_mean(tf.math.squared_difference(representation_batch, target_representation_batch))
+        weighted_consistency_loss = config.consistency_loss_weight * consistency_loss
+
+        # Compute the partial loss
+        l = (tf.math.reduce_mean(loss_value(target_value_batch, value_batch, network.value_support_size)) +
+                MSE(target_reward_batch, tf.squeeze(reward_batch)) +
+                tf.math.reduce_mean(
+                    tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch)) +
+            weighted_consistency_loss)
+
+        # Scale the gradient of the loss by the average number of actions unrolled
+        gradient_scale = 1. / len(actions_time_batch)
+        loss += scale_gradient(l, gradient_scale)
+
+        # Half the gradient of the representation
+        representation_batch = scale_gradient(representation_batch, 0.5)
+    return loss
 
 
 def loss_value(target_value_batch, value_batch, value_support_size: int):

@@ -38,6 +38,8 @@ def play_game(config: MuZeroConfig, network: AbstractNetwork, train: bool = True
     """
     game = config.new_game()
     mode_action_select = 'softmax' if train else 'max'
+    # For ensemble models, reset the selected model at each time step
+    network.dynamic_network.reset_selected_model_id()
 
     while not game.terminal() and len(game.history) < config.max_moves:
         # At the root of the search tree we use the representation function to
