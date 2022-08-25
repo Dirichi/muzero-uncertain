@@ -18,10 +18,9 @@ class EnsembleModel(Model):
     model_mask_pairs = zip(self.models, model_masks)
     outputs = [model(input) for model, model_mask in model_mask_pairs if model_mask]
 
-    prediction = tf.reduce_mean(outputs, axis=0)
     variance = tf.math.reduce_variance(outputs, axis=0)
     uncertainty_score = tf.reduce_mean(variance, axis=-1)
-    return prediction, uncertainty_score
+    return outputs, uncertainty_score
 
 
 class NetworkOutput(typing.NamedTuple):
@@ -106,10 +105,13 @@ class UncertaintyAwareRecurrentModel(RecurrentModel):
         super(UncertaintyAwareRecurrentModel, self).__init__(dynamic_network, reward_network, value_network, policy_network)
 
     def call(self, conditioned_hidden, selection_mask=None):
-        hidden_representation, uncertainty = self.dynamic_network(conditioned_hidden, selection_mask=selection_mask)
+        representations, uncertainty = self.dynamic_network(conditioned_hidden, selection_mask=selection_mask)
         reward = self.reward_network(conditioned_hidden)
-        value = self.value_network(hidden_representation)
-        policy_logits = self.policy_network(hidden_representation)
+        values = [self.value_network(representation) for representation in representations]
+        hidden_representation = tf.reduce_mean(representations, axis=0)
+        policies = [self.policy_network(representation) for representation in representations]
+        value = tf.reduce_mean(values, axis=0)
+        policy_logits = tf.reduce_mean(policies, axis=0)
         return hidden_representation, reward, value, policy_logits, uncertainty
 
 
