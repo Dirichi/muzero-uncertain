@@ -132,7 +132,7 @@ def consistency_cartpole_config() -> MuZeroConfig:
 def ensemble_dynamics_cartpole_config() -> MuZeroConfig:
     config = consistency_cartpole_config()
     config.network = EnsembleCartPoleNetwork
-    config.network_args['num_dynamics_models'] = 5
+    config.network_args['num_dynamics_models'] = 3
     return config
 
 def uncertainty_exploration_cartpole_config() -> MuZeroConfig:
@@ -191,7 +191,7 @@ def consistency_grid_config() -> MuZeroConfig:
 def ensemble_dynamics_grid_config() -> MuZeroConfig:
     config = consistency_grid_config()
     config.network = EnsembleMiniGridNetwork
-    config.network_args['num_dynamics_models'] = 5
+    config.network_args['num_dynamics_models'] = 3
     return config
 
 def uncertainty_exploration_grid_config() -> MuZeroConfig:
