@@ -6,7 +6,7 @@ from networks.shared_storage import SharedStorage
 from self_play.self_play import run_selfplay, run_eval
 from training.replay_buffer import ReplayBuffer
 from training.training import train_network
-from training.ensemble_training import train_ensemble_aware_network
+from training.ensemble_training import train_ensemble_network
 
 
 parser = argparse.ArgumentParser()
@@ -34,7 +34,7 @@ def muzero(config: MuZeroConfig):
         print("Training loop", loop)
         score_train = run_selfplay(config, storage, replay_buffer, config.nb_episodes)
         print("Train score:", score_train)
-        avg_uncertainty = train_ensemble_aware_network(config, storage, replay_buffer, config.nb_epochs)
+        avg_uncertainty = train_ensemble_network(config, storage, replay_buffer, config.nb_epochs)
         print("Uncertainty score after training:", avg_uncertainty)
 
         print(f"MuZero played {config.nb_episodes * (loop + 1)} "

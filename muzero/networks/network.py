@@ -13,10 +13,10 @@ class EnsembleModel(Model):
       super(EnsembleModel, self).__init__()
       self.models = models
 
-  def call(self, input):
-    outputs = []
-    for model in self.models:
-      outputs.append(model(input))
+  def call(self, input, selection_mask=None):
+    model_masks = selection_mask or np.ones(len(self.models))
+    model_mask_pairs = zip(self.models, model_masks)
+    outputs = [model(input) for model, model_mask in model_mask_pairs if model_mask]
 
     prediction = tf.reduce_mean(outputs, axis=0)
     variance = tf.math.reduce_variance(outputs, axis=0)
@@ -190,11 +190,14 @@ class UncertaintyAwareBaseNetwork(BaseNetwork):
             self.policy_network
         )
 
-    def recurrent_inference(self, hidden_state: np.array, action: Action) -> NetworkOutput:
+    def recurrent_inference(self, hidden_state: np.array, action: Action, selection_mask=None) -> NetworkOutput:
         """dynamics + prediction function"""
 
         conditioned_hidden = self._conditioned_hidden_state(hidden_state, action)
-        hidden_representation, reward, value, policy_logits, uncertainty = self.recurrent_model.predict(conditioned_hidden)
+        hidden_representation, reward, value, policy_logits, uncertainty = self.recurrent_model.predict(
+            conditioned_hidden,
+            selection_mask=selection_mask
+        )
         output = NetworkOutput(value=self._value_transform(value),
                                reward=self._reward_transform(reward),
                                policy_logits=NetworkOutput.build_policy_logits(policy_logits),
