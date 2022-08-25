@@ -105,8 +105,8 @@ class UncertaintyAwareRecurrentModel(RecurrentModel):
     def __init__(self, dynamic_network: Model, reward_network: Model, value_network: Model, policy_network: Model):
         super(UncertaintyAwareRecurrentModel, self).__init__(dynamic_network, reward_network, value_network, policy_network)
 
-    def call(self, conditioned_hidden):
-        hidden_representation, uncertainty = self.dynamic_network(conditioned_hidden)
+    def call(self, conditioned_hidden, selection_mask=None):
+        hidden_representation, uncertainty = self.dynamic_network(conditioned_hidden, selection_mask=selection_mask)
         reward = self.reward_network(conditioned_hidden)
         value = self.value_network(hidden_representation)
         policy_logits = self.policy_network(hidden_representation)
@@ -190,14 +190,12 @@ class UncertaintyAwareBaseNetwork(BaseNetwork):
             self.policy_network
         )
 
-    def recurrent_inference(self, hidden_state: np.array, action: Action, selection_mask=None) -> NetworkOutput:
+    def recurrent_inference(self, hidden_state: np.array, action: Action) -> NetworkOutput:
         """dynamics + prediction function"""
 
         conditioned_hidden = self._conditioned_hidden_state(hidden_state, action)
         hidden_representation, reward, value, policy_logits, uncertainty = self.recurrent_model.predict(
-            conditioned_hidden,
-            selection_mask=selection_mask
-        )
+            conditioned_hidden)
         output = NetworkOutput(value=self._value_transform(value),
                                reward=self._reward_transform(reward),
                                policy_logits=NetworkOutput.build_policy_logits(policy_logits),
