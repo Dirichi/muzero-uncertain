@@ -34,8 +34,8 @@ def train_ensemble_network(config: MuZeroConfig, storage: SharedStorage, replay_
     for _ in range(epochs):
         batch = replay_buffer.sample_batch(config.num_unroll_steps, config.td_steps)
         ensemble_masks = np.eye(config.network_args['num_dynamics_models'])
-        shuffled_masks = rng.shuffle(ensemble_masks)
-        for ensemble_mask in shuffled_masks:
+        rng.shuffle(ensemble_masks)
+        for ensemble_mask in ensemble_masks:
             update_weights(config, optimizer, network, accumulator, batch, ensemble_mask)
         storage.save_network(network.training_steps, network)
 
