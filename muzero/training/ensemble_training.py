@@ -30,19 +30,21 @@ def train_ensemble_network(config: MuZeroConfig, storage: SharedStorage, replay_
     optimizer = storage.optimizer
     accumulator = Accumulator()
     rng = np.random.default_rng()
+    all_weights_trained = False
 
     for _ in range(epochs):
         batch = replay_buffer.sample_batch(config.num_unroll_steps, config.td_steps)
         ensemble_masks = np.eye(config.network_args['num_dynamics_models'])
         rng.shuffle(ensemble_masks)
         for ensemble_mask in ensemble_masks:
-            update_weights(config, optimizer, network, accumulator, batch, ensemble_mask)
+            update_weights(config, optimizer, network, accumulator, batch, ensemble_mask, all_weights_trained)
+        all_weights_trained = True
         storage.save_network(network.training_steps, network)
 
     return accumulator.average()
 
 
-def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, accumulator: Accumulator, batch, ensemble_mask):
+def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, accumulator: Accumulator, batch, ensemble_mask, all_weights_trained):
     def scale_gradient(tensor, scale: float):
         """Trick function to scale the gradient in tensorflow"""
         return (1. - scale) * tf.stop_gradient(tensor) + scale * tensor
@@ -116,7 +118,7 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
             # Half the gradient of the representation
             representation_batch = scale_gradient(representation_batch, 0.5)
 
-        if config.diversity_loss_weight > 0:
+        if config.diversity_loss_weight > 0 and all_weights_trained:
             diversity_loss = theil_index_loss(network.dynamic_network.models)
             weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
             loss += weighted_diversity_loss
