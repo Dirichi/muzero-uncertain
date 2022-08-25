@@ -14,7 +14,7 @@ class EnsembleModel(Model):
       self.models = models
 
   def call(self, input, selection_mask=None):
-    model_masks = selection_mask or np.ones(len(self.models))
+    model_masks = selection_mask if selection_mask is not None else np.ones(len(self.models))
     model_mask_pairs = zip(self.models, model_masks)
     outputs = [model(input) for model, model_mask in model_mask_pairs if model_mask]
 
