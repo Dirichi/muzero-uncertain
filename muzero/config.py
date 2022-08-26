@@ -142,7 +142,7 @@ def uncertainty_exploration_cartpole_config() -> MuZeroConfig:
 
 def uncertainty_exploration_and_diversity_cartpole_config() -> MuZeroConfig:
     config = uncertainty_exploration_cartpole_config()
-    config.diversity_loss_weight = 1e-6
+    config.diversity_loss_weight = 0.25
     return config
 
 def full_uncertainty_exploration_cartpole_config() -> MuZeroConfig:
@@ -201,7 +201,7 @@ def uncertainty_exploration_grid_config() -> MuZeroConfig:
 
 def uncertainty_exploration_and_diversity_grid_config() -> MuZeroConfig:
     config = uncertainty_exploration_grid_config()
-    config.diversity_loss_weight = 1e-6
+    config.diversity_loss_weight = 0.25
     return config
 
 def full_uncertainty_exploration_config() -> MuZeroConfig:

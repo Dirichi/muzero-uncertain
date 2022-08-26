@@ -168,6 +168,10 @@ class BaseNetwork(AbstractNetwork):
     def _conditioned_hidden_state(self, hidden_state: np.array, action: Action) -> np.array:
         pass
 
+    @abstractmethod
+    def before_episode_start(self):
+        pass
+
     def cb_get_variables(self) -> Callable:
         """Return a callback that return the trainable variables of the network."""
 
@@ -205,3 +209,6 @@ class UncertaintyAwareBaseNetwork(BaseNetwork):
                                hidden_state=hidden_representation[0],
                                uncertainty=uncertainty[0])
         return output
+
+    def before_episode_start(self):
+        self.dynamic_network.reset_selected_model_id()

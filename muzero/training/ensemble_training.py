@@ -60,11 +60,12 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
         loss += tf.math.reduce_mean(
             tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch))
 
-        dynamics_model_ids = range(config.network_args['num_dynamics_models'])
+        dynamics_model_ids = list(range(config.network_args['num_dynamics_models']))
         rng = np.random.default_rng()
         rng.shuffle(dynamics_model_ids)
         for dynamics_model_id in dynamics_model_ids:
             l = run_recurrent_steps(
+                config,
                 representation_batch,
                 actions_time_batch,
                 targets_time_batch,
@@ -74,7 +75,6 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
                 accumulator,
                 dynamics_model_id
             )
-            l *= (1. / config.network_args['num_dynamics_models'])
             loss += l
 
         if config.diversity_loss_weight > 0:
@@ -108,10 +108,6 @@ def run_recurrent_steps(config, representation_batch, actions_time_batch, target
 
         # Recurrent step from conditioned representation: recurrent + prediction networks
         conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
-        # HACK: Initialize all weights
-        if not all_weights_initialized:
-            network.recurrent_model(conditioned_representation_batch)
-            all_weights_initialized = True
 
         representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
                 conditioned_representation_batch, selected_model_idx=dynamics_model_id)
