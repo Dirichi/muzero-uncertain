@@ -179,7 +179,7 @@ def default_minigrid_config() -> MuZeroConfig:
         td_steps=20,
         visit_softmax_temperature_fn=visit_softmax_temperature,
         lr=0.05)
-    config.window_size = 5000
+    config.window_size = int(1e6)
     return config
 
 
