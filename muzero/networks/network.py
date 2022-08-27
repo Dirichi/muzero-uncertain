@@ -52,6 +52,10 @@ class AbstractNetwork(ABC):
     def recurrent_inference(self, hidden_state, action) -> NetworkOutput:
         pass
 
+    @abstractmethod
+    def before_episode_start(self):
+        pass
+
 
 class UniformNetwork(AbstractNetwork):
     """policy -> uniform, value -> 0, reward -> 0"""
@@ -65,6 +69,9 @@ class UniformNetwork(AbstractNetwork):
 
     def recurrent_inference(self, hidden_state, action) -> NetworkOutput:
         return NetworkOutput(0, 0, {Action(i): 1 / self.action_size for i in range(self.action_size)}, None)
+
+    def before_episode_start(self):
+        pass
 
 
 class InitialModel(Model):
