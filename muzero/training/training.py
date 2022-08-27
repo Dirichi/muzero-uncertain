@@ -12,18 +12,33 @@ from networks.shared_storage import SharedStorage
 from training.replay_buffer import ReplayBuffer
 from tensorflow.keras.models import Model
 
+class Accumulator:
+    def __init__(self) -> None:
+        self.total = 0
+        self.count = 0
+
+    def add(self, values):
+        self.total += sum(values)
+        self.count += len(values)
+
+    def average(self):
+        return self.total / self.count
+
 
 def train_network(config: MuZeroConfig, storage: SharedStorage, replay_buffer: ReplayBuffer, epochs: int):
     network = storage.current_network
     optimizer = storage.optimizer
+    accumulator = Accumulator()
 
     for _ in range(epochs):
         batch = replay_buffer.sample_batch(config.num_unroll_steps, config.td_steps)
-        update_weights(config, optimizer, network, batch)
+        update_weights(config, optimizer, network, accumulator, batch)
         storage.save_network(network.training_steps, network)
 
+    return accumulator.average()
 
-def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, batch):
+
+def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, accumulator: Accumulator, batch):
     def scale_gradient(tensor, scale: float):
         """Trick function to scale the gradient in tensorflow"""
         return (1. - scale) * tf.stop_gradient(tensor) + scale * tensor
@@ -67,7 +82,8 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
             conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
 
             representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
-                    conditioned_representation_batch, train=True)
+                    conditioned_representation_batch)
+            accumulator.add(uncertainty_batch)
 
             # Only execute BPTT for elements with a policy target
             target_policy_batch = [policy for policy, b in zip(target_policy_batch, mask) if b]
@@ -105,7 +121,7 @@ def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network
 def loss_value(target_value_batch, value_batch, value_support_size: int):
     batch_size = len(target_value_batch)
     targets = np.zeros((batch_size, value_support_size))
-    sqrt_value = np.sqrt(target_value_batch)
+    sqrt_value = np.sqrt(np.abs(target_value_batch)) * np.sign(target_value_batch)
     floor_value = np.floor(sqrt_value).astype(int)
     rest = sqrt_value - floor_value
     targets[range(batch_size), floor_value.astype(int)] = 1 - rest

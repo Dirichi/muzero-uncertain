@@ -1,0 +1,168 @@
+"""Training module: this is where MuZero neurons are trained."""
+
+import math
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.losses import MSE
+from typing import List
+
+from config import MuZeroConfig
+from networks.network import BaseNetwork
+from networks.shared_storage import SharedStorage
+from training.replay_buffer import ReplayBuffer
+from tensorflow.keras.models import Model
+
+class Accumulator:
+    def __init__(self) -> None:
+        self.total = 0
+        self.count = 0
+
+    def add(self, values):
+        self.total += sum(values)
+        self.count += len(values)
+
+    def average(self):
+        return self.total / self.count
+
+
+def train_ensemble_network(config: MuZeroConfig, storage: SharedStorage, replay_buffer: ReplayBuffer, epochs: int):
+    network = storage.current_network
+    optimizer = storage.optimizer
+    accumulator = Accumulator()
+
+    for _ in range(epochs):
+        batch = replay_buffer.sample_batch(config.num_unroll_steps, config.td_steps)
+        update_weights(config, optimizer, network, accumulator, batch)
+        storage.save_network(network.training_steps, network)
+
+    return accumulator.average()
+
+def scale_gradient(tensor, scale: float):
+    """Trick function to scale the gradient in tensorflow"""
+    return (1. - scale) * tf.stop_gradient(tensor) + scale * tensor
+
+def update_weights(config: MuZeroConfig, optimizer: tf.keras.optimizers, network: BaseNetwork, accumulator: Accumulator, batch):
+    def loss():
+        loss = 0
+        image_batch, targets_init_batch, targets_time_batch, actions_time_batch, mask_time_batch, dynamic_mask_time_batch = batch
+
+        # Initial step, from the real observation: representation + prediction networks
+        representation_batch, value_batch, policy_batch = network.initial_model(np.array(image_batch))
+
+        # Only update the element with a policy target
+        target_value_batch, _, target_policy_batch, _ = zip(*targets_init_batch)
+        mask_policy = list(map(lambda l: bool(l), target_policy_batch))
+        target_policy_batch = list(filter(lambda l: bool(l), target_policy_batch))
+        policy_batch = tf.boolean_mask(policy_batch, mask_policy)
+
+        # Compute the loss of the first pass
+        loss += tf.math.reduce_mean(loss_value(target_value_batch, value_batch, network.value_support_size))
+        loss += tf.math.reduce_mean(
+            tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch))
+
+        dynamics_model_ids = list(range(config.network_args['num_dynamics_models']))
+        rng = np.random.default_rng()
+        rng.shuffle(dynamics_model_ids)
+        for dynamics_model_id in dynamics_model_ids:
+            l = run_recurrent_steps(
+                config,
+                representation_batch,
+                actions_time_batch,
+                targets_time_batch,
+                mask_time_batch,
+                dynamic_mask_time_batch,
+                network,
+                accumulator,
+                dynamics_model_id
+            )
+            loss += l
+
+        if config.diversity_loss_weight > 0:
+            diversity_loss = theil_index_loss(network.dynamic_network.models)
+            weighted_diversity_loss = config.diversity_loss_weight * diversity_loss
+            loss += weighted_diversity_loss
+
+        return loss
+
+    optimizer.minimize(loss=loss, var_list=network.cb_get_variables())
+    network.training_steps += 1
+
+def run_recurrent_steps(config, representation_batch, actions_time_batch, targets_time_batch, mask_time_batch, dynamic_mask_time_batch, network, accumulator, dynamics_model_id):
+        # Recurrent steps, from action and previous hidden state.
+    loss = 0
+    for actions_batch, targets_batch, mask, dynamic_mask in zip(actions_time_batch, targets_time_batch,
+                                                                mask_time_batch, dynamic_mask_time_batch):
+        target_value_batch, target_reward_batch, target_policy_batch, target_next_state_batch = zip(*targets_batch)
+        # Compute hidden state representation of next state. This will be
+        # used to compute consistency loss.
+        target_representation_batch = network.representation_network(np.array(target_next_state_batch))
+        target_representation_batch = tf.stop_gradient(target_representation_batch)
+
+        # Only execute BPTT for elements with an action
+        representation_batch = tf.boolean_mask(representation_batch, dynamic_mask)
+        target_value_batch = tf.boolean_mask(target_value_batch, mask)
+        target_reward_batch = tf.boolean_mask(target_reward_batch, mask)
+        target_representation_batch = tf.boolean_mask(target_representation_batch, mask)
+        # Creating conditioned_representation: concatenate representations with actions batch
+        actions_batch = tf.one_hot(actions_batch, network.action_size)
+
+        # Recurrent step from conditioned representation: recurrent + prediction networks
+        conditioned_representation_batch = tf.concat((representation_batch, actions_batch), axis=1)
+
+        representation_batch, reward_batch, value_batch, policy_batch, uncertainty_batch = network.recurrent_model(
+                conditioned_representation_batch, selected_model_idx=dynamics_model_id)
+        accumulator.add(uncertainty_batch)
+
+        # Only execute BPTT for elements with a policy target
+        target_policy_batch = [policy for policy, b in zip(target_policy_batch, mask) if b]
+        mask_policy = list(map(lambda l: bool(l), target_policy_batch))
+        target_policy_batch = tf.convert_to_tensor([policy for policy in target_policy_batch if policy])
+        policy_batch = tf.boolean_mask(policy_batch, mask_policy)
+        consistency_loss = tf.math.reduce_mean(tf.math.squared_difference(representation_batch, target_representation_batch))
+        weighted_consistency_loss = config.consistency_loss_weight * consistency_loss
+
+        # Compute the partial loss
+        l = (tf.math.reduce_mean(loss_value(target_value_batch, value_batch, network.value_support_size)) +
+                MSE(target_reward_batch, tf.squeeze(reward_batch)) +
+                tf.math.reduce_mean(
+                    tf.nn.softmax_cross_entropy_with_logits(logits=policy_batch, labels=target_policy_batch)) +
+            weighted_consistency_loss)
+
+        # Scale the gradient of the loss by the average number of actions unrolled
+        gradient_scale = 1. / len(actions_time_batch)
+        loss += scale_gradient(l, gradient_scale)
+
+        # Half the gradient of the representation
+        representation_batch = scale_gradient(representation_batch, 0.5)
+    return loss
+
+
+def loss_value(target_value_batch, value_batch, value_support_size: int):
+    batch_size = len(target_value_batch)
+    targets = np.zeros((batch_size, value_support_size))
+    sqrt_value = np.sqrt(np.abs(target_value_batch)) * np.sign(target_value_batch)
+    floor_value = np.floor(sqrt_value).astype(int)
+    rest = sqrt_value - floor_value
+    targets[range(batch_size), floor_value.astype(int)] = 1 - rest
+    targets[range(batch_size), floor_value.astype(int) + 1] = rest
+
+    return tf.nn.softmax_cross_entropy_with_logits(logits=value_batch, labels=targets)
+
+def theil_index_loss(models: List[Model]) -> float:
+    weights = [model.get_weights() for model in models]
+    total_entropy = 0
+    num_layers = len(models[0].get_weights())
+    for layer_idx in range(num_layers):
+        layer_weights = [weight[layer_idx] for weight in weights]
+        total_entropy += layer_entropy(layer_weights)
+    # Return a negative value because we want to increase entropy and encourage diveristy
+    return -total_entropy / num_layers
+
+def layer_entropy(layer_weights) -> float:
+    weight_norms = [tf.norm(layer_weight) for layer_weight in layer_weights]
+    mean_norm = sum(weight_norms) / len(weight_norms)
+    layer_weight_entropies = [entropy(norm / mean_norm) for norm in weight_norms]
+    return sum(layer_weight_entropies) / len(layer_weight_entropies)
+
+def entropy(value: float) -> float:
+    return value * math.log(value)

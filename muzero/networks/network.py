@@ -1,11 +1,30 @@
 import typing
+import random
 from abc import ABC, abstractmethod
 from typing import Dict, List, Callable
 
 import numpy as np
+import tensorflow as tf
 from tensorflow.keras.models import Model
 
 from game.game import Action
+
+class EnsembleModel(Model):
+  def __init__(self, models) -> None:
+      super(EnsembleModel, self).__init__()
+      self.models = models
+      self.selected_model_id = random.randint(0, len(self.models) - 1)
+
+  def call(self, input, selected_model_idx=None):
+    selected_idx = selected_model_idx if selected_model_idx is not None else self.selected_model_id
+    outputs = [model(input) for model in self.models]
+
+    variance = tf.math.reduce_variance(outputs, axis=0)
+    uncertainty_score = tf.reduce_mean(variance, axis=-1)
+    return outputs[selected_idx], uncertainty_score
+
+  def reset_selected_model_id(self):
+      self.selected_model_id = random.randint(0, len(self.models) - 1)
 
 
 class NetworkOutput(typing.NamedTuple):
@@ -33,6 +52,10 @@ class AbstractNetwork(ABC):
     def recurrent_inference(self, hidden_state, action) -> NetworkOutput:
         pass
 
+    @abstractmethod
+    def before_episode_start(self):
+        pass
+
 
 class UniformNetwork(AbstractNetwork):
     """policy -> uniform, value -> 0, reward -> 0"""
@@ -46,6 +69,9 @@ class UniformNetwork(AbstractNetwork):
 
     def recurrent_inference(self, hidden_state, action) -> NetworkOutput:
         return NetworkOutput(0, 0, {Action(i): 1 / self.action_size for i in range(self.action_size)}, None)
+
+    def before_episode_start(self):
+        pass
 
 
 class InitialModel(Model):
@@ -74,13 +100,13 @@ class RecurrentModel(Model):
         self.value_network = value_network
         self.policy_network = policy_network
 
-    def call(self, conditioned_hidden, train=False):
-        hidden_representation = self.dynamic_network(conditioned_hidden, train=train)
+    def call(self, conditioned_hidden):
+        hidden_representation = self.dynamic_network(conditioned_hidden)
         reward = self.reward_network(conditioned_hidden)
         value = self.value_network(hidden_representation)
         policy_logits = self.policy_network(hidden_representation)
-        # None represents no uncertainty
-        return hidden_representation, reward, value, policy_logits, None
+        # [0] means no uncertainty
+        return hidden_representation, reward, value, policy_logits, [0]
 
 class UncertaintyAwareRecurrentModel(RecurrentModel):
     """Inherits from RecurrentModel, but assumes that the dynamic network
@@ -89,8 +115,8 @@ class UncertaintyAwareRecurrentModel(RecurrentModel):
     def __init__(self, dynamic_network: Model, reward_network: Model, value_network: Model, policy_network: Model):
         super(UncertaintyAwareRecurrentModel, self).__init__(dynamic_network, reward_network, value_network, policy_network)
 
-    def call(self, conditioned_hidden, train=False):
-        hidden_representation, uncertainty = self.dynamic_network(conditioned_hidden, train=train)
+    def call(self, conditioned_hidden, selected_model_idx=None):
+        hidden_representation, uncertainty = self.dynamic_network(conditioned_hidden, selected_model_idx=selected_model_idx)
         reward = self.reward_network(conditioned_hidden)
         value = self.value_network(hidden_representation)
         policy_logits = self.policy_network(hidden_representation)
@@ -129,7 +155,8 @@ class BaseNetwork(AbstractNetwork):
         """dynamics + prediction function"""
 
         conditioned_hidden = self._conditioned_hidden_state(hidden_state, action)
-        hidden_representation, reward, value, policy_logits = self.recurrent_model.predict(conditioned_hidden)
+        # Uncertainty is None
+        hidden_representation, reward, value, policy_logits, _ = self.recurrent_model.predict(conditioned_hidden)
         output = NetworkOutput(value=self._value_transform(value),
                                reward=self._reward_transform(reward),
                                policy_logits=NetworkOutput.build_policy_logits(policy_logits),
@@ -146,6 +173,10 @@ class BaseNetwork(AbstractNetwork):
 
     @abstractmethod
     def _conditioned_hidden_state(self, hidden_state: np.array, action: Action) -> np.array:
+        pass
+
+    @abstractmethod
+    def before_episode_start(self):
         pass
 
     def cb_get_variables(self) -> Callable:
@@ -177,10 +208,14 @@ class UncertaintyAwareBaseNetwork(BaseNetwork):
         """dynamics + prediction function"""
 
         conditioned_hidden = self._conditioned_hidden_state(hidden_state, action)
-        hidden_representation, reward, value, policy_logits, uncertainty = self.recurrent_model.predict(conditioned_hidden)
+        hidden_representation, reward, value, policy_logits, uncertainty = self.recurrent_model.predict(
+            conditioned_hidden)
         output = NetworkOutput(value=self._value_transform(value),
                                reward=self._reward_transform(reward),
                                policy_logits=NetworkOutput.build_policy_logits(policy_logits),
                                hidden_state=hidden_representation[0],
                                uncertainty=uncertainty[0])
         return output
+
+    def before_episode_start(self):
+        self.dynamic_network.reset_selected_model_id()

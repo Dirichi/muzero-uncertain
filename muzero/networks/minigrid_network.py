@@ -1,30 +1,21 @@
-import math
-
 import numpy as np
-import tensorflow as tf
-import random
 from tensorflow.keras import regularizers, Sequential
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.models import Model
 
 from game.game import Action
-from networks.network import UncertaintyAwareBaseNetwork, EnsembleModel
+from networks.network import BaseNetwork
 
-class EnsembleCartPoleNetwork(UncertaintyAwareBaseNetwork):
+class MiniGridNetwork(BaseNetwork):
 
     def __init__(self,
-                 state_size: int,
                  action_size: int,
                  representation_size: int,
-                 max_value: int,
-                 num_dynamics_models: int,
+                 value_support_size: int,
                  hidden_neurons: int = 64,
                  weight_decay: float = 1e-4,
                  representation_activation: str = 'tanh'):
-        self.state_size = state_size
         self.action_size = action_size
-        self.value_support_size = math.ceil(math.sqrt(max_value)) + 1
-        self.num_dynamics_models = num_dynamics_models
+        self.value_support_size = value_support_size
 
         regularizer = regularizers.l2(weight_decay)
         representation_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
@@ -34,11 +25,9 @@ class EnsembleCartPoleNetwork(UncertaintyAwareBaseNetwork):
                                     Dense(self.value_support_size, kernel_regularizer=regularizer)])
         policy_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
                                      Dense(action_size, kernel_regularizer=regularizer)])
-        dynamic_network = self._build_dynamics_model(
-          hidden_neurons=hidden_neurons,
-          regularizer=regularizer,
-          representation_activation=representation_activation,
-          representation_size=representation_size)
+        dynamic_network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
+                                      Dense(representation_size, activation=representation_activation,
+                                            kernel_regularizer=regularizer)])
         reward_network = Sequential([Dense(16, activation='relu', kernel_regularizer=regularizer),
                                      Dense(1, kernel_regularizer=regularizer)])
 
@@ -66,12 +55,3 @@ class EnsembleCartPoleNetwork(UncertaintyAwareBaseNetwork):
         """Compute softmax using numerical stability tricks."""
         values_exp = np.exp(values - np.max(values))
         return values_exp / np.sum(values_exp)
-
-    def _build_dynamics_model(self, hidden_neurons, regularizer, representation_size, representation_activation):
-        networks = []
-        for _ in range(self.num_dynamics_models):
-          network = Sequential([Dense(hidden_neurons, activation='relu', kernel_regularizer=regularizer),
-                                      Dense(representation_size, activation=representation_activation,
-                                            kernel_regularizer=regularizer)])
-          networks.append(network)
-        return EnsembleModel(networks)

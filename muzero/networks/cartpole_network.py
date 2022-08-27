@@ -8,20 +8,6 @@ from tensorflow.keras.layers import Dense
 from game.game import Action
 from networks.network import BaseNetwork
 
-
-class MinMaxScaleLayer(tf.keras.layers.Layer):
-    def __init__(self):
-        super(MinMaxScaleLayer, self).__init__()
-
-    def call(self, inputs):
-        min_input = tf.reduce_min(inputs, axis=1, keepdims=True)
-        max_input = tf.reduce_max(inputs, axis=1, keepdims=True)
-        scale = max_input - min_input
-        scale = tf.where(scale > 1e-5, scale, scale + 1e-5)
-        normalized = (inputs - min_input) / scale
-        return normalized
-
-
 class CartPoleNetwork(BaseNetwork):
 
     def __init__(self,
