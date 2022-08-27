@@ -171,12 +171,12 @@ def default_minigrid_config() -> MuZeroConfig:
                       'hidden_neurons': 16},
         network=MiniGridNetwork,
         action_space_size=7,
-        max_moves=20,
+        max_moves=15,
         discount=0.99,
         dirichlet_alpha=0.25,
         num_simulations=11,
         batch_size=512,
-        td_steps=10,
+        td_steps=20,
         visit_softmax_temperature_fn=visit_softmax_temperature,
         lr=0.05)
     config.window_size = 5000
